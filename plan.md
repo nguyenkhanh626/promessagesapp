@@ -1,212 +1,169 @@
 # KẾ HOẠCH PHÁT TRIỂN ỨNG DỤNG HỌP & NHẮN TIN TRỰC TUYẾN (TEAMS CLONE)
 > **Tên dự án tham chiếu:** `promessagesapp` (Spring Boot Backend + Modern Web Frontend)  
 > **Quy mô đội ngũ:** 3 thành viên  
-> **Tổng thời gian dự kiến:** 6 - 7 tuần (Giai đoạn 1: 3-4 tuần, Giai đoạn 2: 2-3 tuần)
+> **Thời gian dự kiến:** 7 tuần (Chia đều theo Module chức năng & Fullstack cho cả 3 thành viên)  
+> **Nguyên tắc phân chia:** Chia đều theo **chức năng nghiệp vụ (Feature-based / Vertical Slice)** — mỗi thành viên làm chủ một phân hệ chức năng từ Giao diện (Frontend) đến Xử lý nghiệp vụ & CSDL (Backend/DB), khối lượng tương đương nhau xuyên suốt từ Tuần 1 đến Tuần 7.
 
 ---
 
 ## 1. TỔNG QUAN DỰ ÁN & KIẾN TRÚC KỸ THUẬT
 
 ### 1.1 Mục tiêu dự án
-Xây dựng nền tảng cộng tác và hội nghị trực tuyến thời gian thực tương tự Microsoft Teams:
-- **Giai đoạn 1 (Tuần 1 - 4):** Đăng nhập/xác thực, nhắn tin thời gian thực (1-1 và nhóm), tạo nhóm/kênh, cuộc gọi thoại (Audio Call) và cuộc gọi hình ảnh (Video Call) chất lượng cao dựa trên WebRTC.
-- **Giai đoạn 2 (Tuần 5 - 7):** Bảng vẽ cộng tác trực tuyến (Collaborative Whiteboard), trợ lý AI trong khung chat (tóm tắt cuộc trò chuyện, hỏi đáp kiến thức, gợi ý trả lời thông minh), chia sẻ màn hình nâng cao và đóng gói hoàn thiện.
+Xây dựng nền tảng cộng tác và hội nghị trực tuyến thời gian thực chuẩn phong cách Microsoft Teams với 3 trụ cột nghiệp vụ lớn:
+1. **Module 1: Quản trị Tài khoản & Hệ thống Nhắn tin Thời gian thực (Auth, Presence & Real-time Chat)**: Đăng ký/đăng nhập, trạng thái hoạt động, chat 1-1, chat nhóm/kênh, chia sẻ file, thông báo tức thì.
+2. **Module 2: Hội nghị Âm thanh, Hình ảnh & Chia sẻ màn hình (Audio/Video Calling & Screen Share)**: Cuộc gọi thoại & hình ảnh chất lượng cao 1-1 và đa điểm (Mesh WebRTC), chia sẻ màn hình, cơ chế chuyển tiếp tín hiệu Signaling Server.
+3. **Module 3: Bảng vẽ Tương tác Trực tuyến & Trợ lý Thông minh AI (Whiteboard & AI Assistant)**: Bảng vẽ nhiều người vẽ cùng lúc trong phòng họp, trợ lý AI tóm tắt nội dung hội thoại, trích xuất việc cần làm và trả lời thông minh qua LLM.
 
-### 1.2 Lựa chọn Công nghệ (Tech Stack)
+### 1.2 Kiến trúc Hệ thống
 
 ```
-[ Frontend: React / Next.js / Vite ]
-       │              ▲
-       │ HTTP / REST  │ WebSocket (STOMP / SockJS)
-       ▼              ▼
-[ Backend: Spring Boot 3.x / Java 21+ (`promessagesapp`) ]
-   ├── Spring Security + JWT
-   ├── Spring Data JPA + PostgreSQL / MySQL
-   ├── Spring WebSocket (STOMP Broker cho Chat & Signaling)
-   └── Spring AI / OpenAI / Gemini API Integration
-       ▲
-       │ WebRTC Peer-to-Peer & Mesh (Signaling qua Spring Boot)
-       ▼
-[ Media: WebRTC + STUN/TURN (Coturn) ]
+[ Frontend: React / Vite + TypeScript + Tailwind CSS ]
+       │                      │                      │
+       │ HTTP REST API        │ WebSocket STOMP      │ WebRTC P2P / Mesh
+       ▼                      ▼                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              BACKEND: Spring Boot (promessagesapp)          │
+│  ├── Module 1: Auth & User & Realtime Chat Service          │
+│  ├── Module 2: WebRTC Signaling & Call Management Service   │
+│  └── Module 3: Whiteboard Synchronization & AI Service      │
+└─────────────────────────────────────────────────────────────┘
+       │                      │                      │
+       ▼                      ▼                      ▼
+[ PostgreSQL / MySQL ]    [ Redis Presence ]    [ AI API / Coturn ]
 ```
 
-| Tầng | Công nghệ lựa chọn | Mục đích sử dụng |
+---
+
+## 2. PHÂN CHIA VAI TRÒ ĐỘI NGŨ THEO CHỨC NĂNG (3 THÀNH VIÊN)
+
+| Thành viên | Trọng tâm Phân hệ Chức năng | Phạm vi công việc (Fullstack theo chức năng) |
 | :--- | :--- | :--- |
-| **Backend** | Java (Spring Boot Starter WebMvc, WebSocket) | Xử lý nghiệp vụ, API REST, WebSocket STOMP server |
-| **Database** | PostgreSQL (hoặc MySQL) + Redis (cache/presence) | Lưu trữ User, Messages, Groups, Call Logs, Whiteboard sessions |
-| **Realtime** | WebSocket (STOMP protocol) | Nhận/gửi tin nhắn tức thì, trạng thái Online/Offline, WebRTC Signaling |
-| **Media Calling** | WebRTC (Mesh topology cho nhóm nhỏ / P2P) | Truyền tải Audio/Video có độ trễ cực thấp, không qua server lưu trữ trung gian |
-| **STUN/TURN** | Google Public STUN + Coturn Server | Vượt tường lửa/NAT cho WebRTC |
-| **Frontend** | React / Vite (TypeScript, Tailwind CSS, Lucide Icons) | Giao diện chuẩn phong cách Microsoft Teams (Dark/Light mode) |
-| **Whiteboard** | HTML5 Canvas / Fabric.js / Excalidraw Engine | Bảng vẽ tương tác nhiều người vẽ đồng thời |
-| **AI Engine** | Spring AI + Gemini API / OpenAI API | Trợ lý ảo AI bot trong kênh chat, tóm tắt văn bản chat, gợi ý trả lời |
+| **Thành viên 1** | **Xác thực, Người dùng & Nhắn tin Thời gian thực (Auth & Realtime Chat Lead)** | - **Backend:** Spring Security + JWT, Quản lý User/Presence, WebSocket Chat Broker, Entity Message/Conversation, REST API Chat & File Upload.<br>- **Frontend:** Layout App Shell Teams, Giao diện Auth, Khung chat 1-1 và nhóm, Quản lý hội thoại/kênh, Typing indicator, Danh sách online/offline. |
+| **Thành viên 2** | **Hội nghị Âm thanh, Hình ảnh & Họp trực tuyến (Audio/Video Calling & WebRTC Lead)** | - **Backend:** WebSocket Signaling Server (`/app/call/**`), Quản lý `CallSession`/`CallParticipant`, Lịch sử cuộc gọi (Call Logs), Cấu hình STUN/TURN.<br>- **Frontend & Media:** Module WebRTC Client (`RTCPeerConnection`), Giao diện phòng gọi thoại/video (Video Grid), Mute/Cam toggle, Chia sẻ màn hình (Screen Share), Phát hiện tiếng nói (VAD). |
+| **Thành viên 3** | **Bảng vẽ Tương tác Trực tuyến & Trợ lý Trí tuệ Nhân tạo (Whiteboard & AI Lead)** | - **Backend:** WebSocket Whiteboard Broker (`/topic/whiteboard/**`), Lưu trữ nét vẽ/snapshot, Tích hợp Spring AI / Gemini API (Chatbot, Tóm tắt, Trích xuất việc cần làm).<br>- **Frontend:** Whiteboard Canvas Studio (Fabric.js), Đồng bộ nét vẽ & con trỏ chuột thời gian thực, Giao diện AI Assistant (@bot), Hiển thị tóm tắt cuộc họp & Smart Replies. |
 
 ---
 
-## 2. PHÂN CHIA VAI TRÒ ĐỘI NGŨ (3 THÀNH VIÊN)
+## 3. LỘ TRÌNH 7 TUẦN CHI TIẾT (CHIA ĐỀU CHO 3 THÀNH VIÊN)
 
-| Thành viên | Vai trò chính | Trọng tâm công việc |
-| :--- | :--- | :--- |
-| **Thành viên A** | **Frontend & UI/UX Lead** | Thiết kế UI/UX Microsoft Teams (Sidebar, Chat Feed, Video Grid, Whiteboard Canvas), Quản lý State (Zustand/Redux), kết nối REST API & WebSocket Client. |
-| **Thành viên B** | **Backend & Database / DevOps Lead** | Kiến trúc Spring Boot, thiết kế Database Schema, Bảo mật (Spring Security + JWT), Xây dựng STOMP WebSocket Server, Signaling Server, Docker & CI/CD. |
-| **Thành viên C** | **Fullstack Media & AI Specialist** | Logic WebRTC phía Client & Server (RTCPeerConnection, ICE candidate, SDP Offer/Answer), Xử lý Media Stream, Tích hợp Bảng vẽ (Canvas Sync) và Tích hợp AI (Spring AI/LLM API). |
+### TUẦN 1: KHỞI TẠO NỀN TẢNG & NỀN MÓNG CÁC PHÂN HỆ
+*Mục tiêu tuần: Cả 3 thành viên dựng xong môi trường, cấu hình backend/frontend và xây dựng phần móng của module mình phụ trách.*
 
----
-
-## 3. LỘ TRÌNH PHÁT TRIỂN CHI TIẾT (ROADMAP)
-
-### GIAI ĐOẠN 1: CÁC TÍNH NĂNG CỐT LÕI (TUẦN 1 - 4)
-
-#### Tuần 1: Khởi tạo Nền tảng, Xác thực (Auth) & Khung Giao diện MS Teams
-*Mục tiêu: Đăng ký/đăng nhập hoàn chỉnh, cấu trúc cơ sở dữ liệu, dựng layout Teams hoàn chỉnh.*
-
-- **Thành viên A (Frontend):**
-  - Khởi tạo dự án Frontend (React + Vite + TypeScript).
-  - Dựng layout chuẩn Microsoft Teams: Thanh bên (Activity, Chat, Teams, Calls), Danh sách hội thoại (Sidebar), Khung chat chính, Thanh trạng thái.
-  - Trang Đăng nhập / Đăng ký / Quản lý trang cá nhân (Avatar, Tên, Trạng thái hoạt động).
-- **Thành viên B (Backend):**
-  - Mở rộng `promessagesapp` với các dependency: `spring-boot-starter-data-jpa`, `spring-boot-starter-security`, `jjwt`, `spring-boot-starter-validation`, `postgresql` (hoặc `mysql`).
-  - Thiết kế Database Entity: `User`, `Role`, `RefreshToken`.
-  - Cấu hình Spring Security 6 với JWT filter: Endpoint `/api/auth/register`, `/api/auth/login`, `/api/auth/me`.
-- **Thành viên C (Fullstack Media/AI):**
-  - Thiết kế cấu trúc giao tiếp WebSocket (`/ws` endpoint) sử dụng `spring-boot-starter-websocket` với STOMP.
-  - Chuẩn bị kiến trúc lưu trữ trạng thái người dùng (User Presence: Online, Busy, Offline, Away) qua WebSocket session events (`SessionConnectedEvent`, `SessionDisconnectEvent`).
-  - Viết tài liệu API giao tiếp (Swagger / Postman Collection).
+- **Thành viên 1 (Auth & Chat Core):**
+  - **Backend:** Cấu hình `pom.xml` (Spring Data JPA, Spring Security, JWT, Validation, PostgreSQL Driver). Thiết kế entity `User`, `Role`. Viết API Đăng ký (`/api/auth/register`), Đăng nhập (`/api/auth/login`), Lấy thông tin cá nhân (`/api/auth/me`).
+  - **Frontend:** Xây dựng trang Đăng nhập / Đăng ký đẹp mắt, validate form, lưu trữ token JWT vào LocalStorage / Cookie và kết nối API Auth.
+- **Thành viên 2 (WebRTC Calling):**
+  - **Backend:** Cấu hình Spring WebSocket STOMP Server (`/ws` endpoint). Thiết kế cơ chế bắt sự kiện kết nối/ngắt kết nối WebSocket (`SessionConnectedEvent`, `SessionDisconnectEvent`).
+  - **Frontend & Media:** Tạo module kiểm tra và yêu cầu cấp quyền thiết bị Micro / Webcam từ trình duyệt (`navigator.mediaDevices.getUserMedia`). Viết PoC kết nối STOMP client từ Frontend để chuẩn bị cho Signaling.
+- **Thành viên 3 (Whiteboard & AI):**
+  - **Frontend:** Khởi tạo kiến trúc Frontend chuẩn (React + Vite + TypeScript + Tailwind CSS), dựng khung giao diện chính (App Shell Microsoft Teams: Activity bar, Sidebar, Main Content area, Header profile).
+  - **Backend & AI:** Khảo sát và tích hợp Spring AI / HTTP Client tới Gemini/OpenAI API. Viết service cơ bản test gọi prompt thành công từ Backend (`/api/ai/health`). Chuẩn bị cấu trúc dữ liệu lưu trữ nét vẽ Canvas.
 
 ---
 
-#### Tuần 2: Hệ thống Nhắn tin Thời gian thực (1-1 & Nhóm) & Quản lý Nhóm
-*Mục tiêu: Nhắn tin tức thì, tạo nhóm, quản lý thành viên, xem lịch sử tin nhắn.*
+### TUẦN 2: CHAT 1-1, CUỘC GỌI THOẠI 1-1 & BẢNG VẼ ĐỘC LẬP
+*Mục tiêu tuần: Hoàn thành tính năng nhắn tin 1-1 tức thì, thực hiện được cuộc gọi thoại P2P và vẽ canvas cơ bản.*
 
-- **Thành viên A (Frontend):**
-  - Tích hợp STOMP client (`@stomp/stompjs` hoặc `sockjs-client`).
-  - Khung chat: Soạn thảo tin nhắn, hiển thị danh sách tin nhắn theo thời gian, hiển thị trạng thái đã gửi/đã nhận.
-  - Modal tạo nhóm mới, thêm thành viên từ danh sách liên hệ, xem thông tin nhóm.
-  - Hiển thị ai đang nhập tin nhắn (*User is typing...*).
-- **Thành viên B (Backend):**
-  - Database Entity: `Conversation`, `ConversationMember`, `Message`, `Attachment`.
-  - API REST: Lấy lịch sử tin nhắn phân trang (Pagination), danh sách cuộc hội thoại của user.
-  - Cấu hình STOMP MessageBroker (`/topic/conversation/{id}`, `/queue/messages`).
-  - API quản lý nhóm: Tạo nhóm, thêm/xóa thành viên, gán quyền Admin/Member.
-- **Thành viên C (Fullstack Media/AI):**
-  - Xử lý upload file/ảnh/âm thanh qua REST API (hỗ trợ multipart upload hoặc cloud storage).
-  - Tối ưu hóa WebSocket payload: định dạng JSON chuẩn cho tin nhắn text, file, và typing indicator.
-  - Hỗ trợ thông báo tin nhắn mới khi đang ở màn hình khác (Desktop/Browser Notification).
+- **Thành viên 1 (Auth & Chat Core):**
+  - **Backend:** Tạo entity `Conversation` (loại 1-1), `Message`. Viết API lấy lịch sử tin nhắn phân trang (`GET /api/conversations/{id}/messages`). Cấu hình STOMP message channel `/topic/chat/{conversationId}`.
+  - **Frontend:** Khung chat 1-1: Hiển thị danh sách tin nhắn, ô nhập tin nhắn, gửi tin nhắn tức thì qua STOMP, hiển thị bong bóng chat theo người gửi.
+- **Thành viên 2 (WebRTC Calling):**
+  - **Backend:** Thiết kế giao thức Signaling qua STOMP: các message type `CALL_INVITE`, `CALL_ACCEPT`, `CALL_REJECT`, `CALL_OFFER`, `CALL_ANSWER`, `ICE_CANDIDATE`. Tạo entity `CallSession`.
+  - **Frontend & Media:** Modal thông báo cuộc gọi đến (đổ chuông, nút Nhận / Từ chối). Tạo luồng `RTCPeerConnection` Audio-only kết nối P2P giữa 2 người dùng. Nút Mute/Unmute microphone.
+- **Thành viên 3 (Whiteboard & AI):**
+  - **Frontend:** Tích hợp Canvas Engine (HTML5 Canvas / Fabric.js), xây dựng thanh công cụ vẽ: Bút vẽ tự do, Tẩy, Chọn màu, Độ dày nét vẽ, Nút Xóa bảng (Clear).
+  - **Backend:** Thiết kế entity `WhiteboardSession`. Tạo kênh WebSocket STOMP `/topic/whiteboard/{sessionId}` để phát lại các nét vẽ cơ bản cho các thành viên.
 
 ---
 
-#### Tuần 3: Tích hợp WebRTC Signaling & Tính năng Nghe gọi thoại (Audio Call)
-*Mục tiêu: Thiết lập kết nối P2P WebRTC, thực hiện cuộc gọi thoại 1-1 và phòng thoại nhóm.*
+### TUẦN 3: CHAT NHÓM & MEDIA, CUỘC GỌI VIDEO 1-1 & ĐỒNG BỘ BẢNG VẼ
+*Mục tiêu tuần: Chat nhóm gửi kèm hình ảnh/file, gọi video 1-1 mượt mà, nhiều người cùng vẽ trên một bảng.*
 
-- **Thành viên A (Frontend):**
-  - Modal thông báo cuộc gọi đến (Ringtone, nút Nghe / Từ chối).
-  - Giao diện phòng gọi thoại: Avatar người nói, hiệu ứng sóng âm (Audio visualizer), thanh điều khiển (Mute/Unmute Mic, Bật loa, Nút gác máy).
-  - Quản lý trạng thái cuộc gọi (Idle, Calling, Connected, Ended).
-- **Thành viên B (Backend):**
-  - Xây dựng WebRTC Signaling Server qua WebSocket STOMP:
-    - Route `/app/call/signal`: nhận và chuyển tiếp `offer`, `answer`, `ice-candidate`.
-    - Route `/topic/call/{callId}`: broadcast tín hiệu gọi tới người nhận.
-  - Quản lý trạng thái phòng gọi (`CallSession`, `CallParticipant`, thời lượng cuộc gọi).
-  - Cấu hình STUN Server miễn phí của Google và cài đặt TURN server dự phòng.
-- **Thành viên C (Fullstack Media/AI):**
-  - Xây dựng module WebRTC Client (`navigator.mediaDevices.getUserMedia({ audio: true })`).
-  - Xử lý tạo `RTCPeerConnection`, thu thập ICE candidate và trao đổi SDP Offer/Answer.
-  - Xử lý luồng âm thanh: kiểm soát Gain, phát hiện tiếng nói (VAD - Voice Activity Detection) để hiển thị viền sáng quanh avatar người đang phát biểu.
+- **Thành viên 1 (Auth & Chat Core):**
+  - **Backend:** Mở rộng entity `Conversation` (loại GROUP), `ConversationMember`. API tạo nhóm, thêm/xóa thành viên. API upload file/hình ảnh đính kèm (`/api/files/upload`).
+  - **Frontend:** Modal tạo nhóm chat mới, giao diện danh sách thành viên nhóm. Chức năng tải ảnh/file đính kèm vào khung chat và render ảnh/link tải file trực tiếp.
+- **Thành viên 2 (WebRTC Calling):**
+  - **Backend:** Mở rộng Signaling Server hỗ trợ trao đổi video tracks, cập nhật trạng thái kết thúc cuộc gọi và tính thời lượng gọi.
+  - **Frontend & Media:** Nâng cấp WebRTC client hỗ trợ Video stream (`audio: true`, `video: true`). Giao diện gọi video 1-1 (video đối phương toàn màn hình, video của mình ở góc nhỏ PiP). Nút Bật/Tắt Webcam và chọn thiết bị đầu vào.
+- **Thành viên 3 (Whiteboard & AI):**
+  - **Frontend:** Bổ sung công cụ hình học (Hình chữ nhật, Hình tròn, Đường thẳng, Mũi tên, Hộp văn bản Text box). Hiển thị con trỏ chuột thời gian thực kèm tên của các người vẽ khác trên Canvas.
+  - **Backend:** Cơ chế gom cụm tọa độ nét vẽ (Throttling / Debouncing) trước khi gửi qua WebSocket để tránh nghẽn băng thông. API lưu snapshot bảng vẽ thành JSON vào DB.
 
 ---
 
-#### Tuần 4: Cuộc gọi Video (Video Call), Chia sẻ màn hình & Hoàn thiện Giai đoạn 1
-*Mục tiêu: Video Call 1-1 và Group Video nhiều người (dạng Mesh), bật/tắt camera, chia sẻ màn hình.*
+### TUẦN 4: TRẢI NGHIỆM CHAT NÂNG CAO, HỘI NGHỊ NHÓM & BOT AI TRONG CHAT
+*Mục tiêu tuần: Trạng thái typing/presence, gọi video nhóm đa người dùng, tích hợp chatbot AI hỏi đáp trực tiếp trong chat.*
 
-- **Thành viên A (Frontend):**
-  - Giao diện Video Call Grid chuẩn MS Teams: Hiển thị lưới nhiều video, tự động co giãn kích thước theo số lượng người tham gia.
-  - Nút chuyển đổi Camera (Bật/Tắt cam, chọn thiết bị webcam đầu vào).
-  - Nút chia sẻ màn hình (Screen Share) chuyển luồng video chính sang màn hình được chia sẻ.
-- **Thành viên B (Backend):**
-  - API lưu lịch sử cuộc gọi (Call Logs: ai gọi ai, thời lượng, trạng thái thành công/nhỡ).
-  - Bổ sung logic xử lý khi người dùng mất mạng đột ngột (tự động dọn dẹp phòng gọi).
-  - Viết Unit Test và Integration Test cho Auth, Message, và Signaling Controller.
-- **Thành viên C (Fullstack Media/AI):**
-  - Nâng cấp WebRTC client hỗ trợ cả Audio và Video (`video: true`, `audio: true`).
-  - Tích hợp tính năng Chia sẻ màn hình (`navigator.mediaDevices.getDisplayMedia`).
-  - Xử lý Mesh WebRTC cho phòng họp từ 3-5 người (mỗi client tạo kết nối peer tới từng người khác).
-  - Tối ưu hóa băng thông: giảm bitrate khi mạng yếu, fallback về chỉ nghe khi tắt camera.
+- **Thành viên 1 (Auth & Chat Core):**
+  - **Backend:** Cơ chế User Presence: Quản lý và broadcast trạng thái Online / Offline / Busy qua Redis hoặc In-memory. Kênh WebSocket thông báo "Ai đang soạn tin..." (Typing indicator).
+  - **Frontend:** Hiển thị chấm trạng thái online trên avatar. Hiển thị dòng chữ động *"[Tên người dùng] đang nhập tin nhắn..."*. Trình tìm kiếm tin nhắn và danh bạ người dùng.
+- **Thành viên 2 (WebRTC Calling):**
+  - **Backend:** Quản lý phòng gọi nhóm đa người dùng: Quản lý danh sách `participants` trong phòng họp, tự động dọn dẹp phòng khi người cuối cùng thoát.
+  - **Frontend & Media:** Xây dựng mô hình Mesh WebRTC cho phòng họp 3-5 người (mỗi client kết nối peer tới từng người khác). Giao diện Video Grid co giãn tự động theo số lượng người tham gia, phát hiện giọng nói (VAD) để đổi viền sáng quanh video người đang nói.
+- **Thành viên 3 (Whiteboard & AI):**
+  - **Backend:** Tích hợp Spring AI Service: Tạo endpoint `/api/ai/chat` (Server-Sent Events - SSE để stream câu trả lời từng chữ). Xây dựng System Prompt chuyên nghiệp cho trợ lý Teams.
+  - **Frontend:** Tính năng triệu hồi bot AI trong nhóm chat (gõ `@AI-Assistant` hoặc nút Hỏi AI). Giao diện hiển thị tin nhắn AI gõ chữ mượt mà, hỗ trợ render Markdown và Code block.
+
+---
+
+### TUẦN 5: QUẢN LÝ TỆP & PIN, CHIA SẺ MÀN HÌNH & BẢNG VẼ TRONG PHÒNG HỌP
+*Mục tiêu tuần: Ghim tin nhắn/tài liệu, chia sẻ màn hình trong cuộc gọi, nhúng bảng vẽ tương tác trực tiếp vào cuộc họp.*
+
+- **Thành viên 1 (Auth & Chat Core):**
+  - **Backend:** Tính năng Ghim tin nhắn (`PinnedMessages`), Đánh dấu tin nhắn quan trọng, Thư viện lưu trữ tất cả Media/Files đã gửi trong từng nhóm chat (`GET /api/conversations/{id}/media`).
+  - **Frontend:** Tab "Tệp đã chia sẻ" và "Tin nhắn đã ghim" ở thanh bên phải khung chat. Xem trước (Preview) ảnh và file PDF trực tiếp trên ứng dụng.
+- **Thành viên 2 (WebRTC Calling):**
+  - **Backend:** Bổ sung cơ chế báo hiệu chia sẻ màn hình qua Signaling Server (loại track `SCREEN_SHARE`).
+  - **Frontend & Media:** Tích hợp tính năng Chia sẻ toàn màn hình hoặc cửa sổ ứng dụng (`navigator.mediaDevices.getDisplayMedia`). Giao diện ưu tiên phóng to màn hình được chia sẻ, thu nhỏ camera người nói xuống góc dưới.
+- **Thành viên 3 (Whiteboard & AI):**
+  - **Frontend:** Chế độ mở Bảng vẽ ngay trong cuộc họp (Split-screen view: một nửa màn hình là Video người họp, một nửa là Canvas vẽ chung). Nút Xuất file bảng vẽ ra ảnh PNG / PDF.
+  - **Backend & AI:** Xây dựng tính năng "Tóm tắt cuộc trò chuyện" (Chat Summarizer): API gom các tin nhắn gần nhất và yêu cầu AI trích xuất nội dung chính kèm các đầu việc cần làm (Action Items).
+
+---
+
+### TUẦN 6: TIN TỨC TƯƠNG TÁC, TINH CHỈNH ĐỘ TRỄ MẠNG & GỢI Ý TRẢ LỜI AI
+*Mục tiêu tuần: Cảm xúc/Emoji reaction cho tin nhắn, nâng cấp độ ổn định cuộc gọi, gợi ý trả lời thông minh (Smart Replies).*
+
+- **Thành viên 1 (Auth & Chat Core):**
+  - **Backend:** Thả cảm xúc trên tin nhắn (`MessageReaction` - Thích, Thả tim, Haha, Cười...), Trả lời trích dẫn tin nhắn cũ (Reply/Quote message).
+  - **Frontend:** Thanh chọn Emoji phản ứng nhanh khi rê chuột vào tin nhắn. Giao diện hiển thị tin nhắn trích dẫn kèm nút cuộn nhanh tới tin nhắn gốc.
+- **Thành viên 2 (WebRTC Calling):**
+  - **Backend:** Cài đặt cấu hình Coturn Server (STUN/TURN) để vượt tường lửa NAT trong môi trường mạng thực tế. Bổ sung bảng ghi lịch sử cuộc gọi (`CallLogs`: thời lượng, trạng thái nhỡ/thành công).
+  - **Frontend & Media:** Xử lý cơ chế tự động kết nối lại khi mất mạng (ICE restart / Auto-reconnect). Giảm băng thông video khi mạng yếu để đảm bảo đường truyền thoại không bị gián đoạn.
+- **Thành viên 3 (Whiteboard & AI):**
+  - **Backend & AI:** Xây dựng tính năng AI Smart Replies: Tự động phân tích tin nhắn mới nhất và tạo 3 gợi ý trả lời nhanh cho người dùng. Thiết lập Rate Limiting và bảo vệ API Key AI.
+  - **Frontend:** Hiển thị 3 nút gợi ý trả lời nhanh dạng pill phía trên ô nhập liệu. Nút "Tóm tắt nội dung cuộc họp" trong modal biên bản cuộc họp.
+
+---
+
+### TUẦN 7: KIỂM THỬ TOÀN DIỆN, DOCKER HÓA, BẢO MẬT & BÁO CÁO TỔNG KẾT
+*Mục tiêu tuần: Đóng gói toàn bộ hệ thống bằng Docker, bảo mật HTTPS/WSS, kiểm thử tích hợp chéo và hoàn thiện báo cáo.*
+
+- **Thành viên 1 (Auth & Chat Core):**
+  - Hoàn thiện UI/UX toàn hệ thống: Tinh chỉnh giao diện Dark/Light mode chuẩn Teams, tối ưu Responsive trên màn hình Tablet/Laptop nhỏ.
+  - Viết Unit Test & Integration Test cho tầng Auth, UserController, MessageController. Kiểm thử tải đồng thời 50-100 kết nối WebSocket chat.
+- **Thành viên 2 (WebRTC Calling):**
+  - Viết `Dockerfile` cho Backend Spring Boot và Frontend React. Tạo `docker-compose.yml` tích hợp Spring Boot, PostgreSQL, Redis và Coturn Server.
+  - Cấu hình SSL/TLS (HTTPS và WSS) bắt buộc để trình duyệt cấp quyền truy cập Camera/Microphone trên môi trường mạng LAN/Internet. Kiểm thử cuộc gọi video 3-4 người.
+- **Thành viên 3 (Whiteboard & AI):**
+  - Kiểm thử End-to-End (E2E Test) kịch bản kết hợp: Vừa họp video vừa vẽ bảng vẽ vừa nhờ AI tóm tắt nội dung.
+  - Soạn thảo tài liệu hướng dẫn cài đặt và vận hành hệ thống (`README.md`, Swagger API Documentation). Chuẩn bị Slide thuyết trình báo cáo và video demo sản phẩm hoàn chỉnh.
 - **Cả 3 thành viên:**
-  - Tổng kết Giai đoạn 1: Demo tính năng Nhắn tin, Tạo nhóm, Gọi thoại, Gọi video.
-  - Bug fixing và tinh chỉnh trải nghiệm (độ trễ âm thanh, micro giật lag).
-
----
-
-### GIAI ĐOẠN 2: CÁC TÍNH NĂNG MỞ RỘNG (TUẦN 5 - 7)
-
-#### Tuần 5: Bảng vẽ Trực tuyến (Collaborative Online Whiteboard)
-*Mục tiêu: Bảng vẽ trắng tương tác trực tiếp nhiều người cùng vẽ trong phòng họp hoặc nhóm chat.*
-
-- **Thành viên A (Frontend):**
-  - Xây dựng giao diện Whiteboard Studio: Canvas vẽ, thanh công cụ (Bút vẽ, Tẩy, Hình chữ nhật/Hình tròn, Mũi tên, Đổi màu, Độ dày nét vẽ, Text box).
-  - Chế độ mở Whiteboard trong cuộc gọi video (Split-screen: nửa bảng vẽ, nửa video người tham gia).
-  - Nút xuất file bảng vẽ (Export PNG/PDF).
-- **Thành viên B (Backend):**
-  - Database Entity: `WhiteboardSession`, `WhiteboardElement` (lưu vector/JSON các nét vẽ để load lại khi vào sau).
-  - WebSocket Topic `/topic/whiteboard/{sessionId}`: Đồng bộ các sự kiện vẽ (draw-stroke, clear, undo, update-element).
-  - API lưu snapshot bảng vẽ vào hệ thống.
-- **Thành viên C (Fullstack Media/AI):**
-  - Xây dựng lõi đồng bộ Canvas với Fabric.js hoặc Canvas API thuần.
-  - Tối ưu hóa gửi dữ liệu nét vẽ thời gian thực: Gom cụm tọa độ (Throttling / Debouncing) để tránh nghẽn WebSocket khi vẽ nhanh.
-  - Xử lý đồng bộ vị trí con trỏ chuột của từng thành viên kèm tên hiển thị trên bảng vẽ.
-
----
-
-#### Tuần 6: Tích hợp Trợ lý Trí tuệ Nhân tạo (AI Assistant) vào Chat
-*Mục tiêu: AI Bot trả lời trực tiếp trong chat, tóm tắt nội dung cuộc trò chuyện, gợi ý câu trả lời.*
-
-- **Thành viên A (Frontend):**
-  - Giao diện gọi bot AI (gõ `@AI-Assistant` hoặc nút "Hỏi AI" ngay trong khung chat).
-  - Giao diện hiển thị tin nhắn từ AI với hiệu ứng gõ chữ (Streaming/Typing effect), hỗ trợ Markdown và Code block.
-  - Nút "Tóm tắt cuộc họp/nhóm chat" (Summarize conversation) hiện modal popup bản tóm tắt các ý chính và hành động cần làm (Action Items).
-- **Thành viên B (Backend):**
-  - Tích hợp Spring AI (hoặc gọi HTTP Client tới OpenAI / Gemini API).
-  - Tạo service `AiChatService`:
-    - Quản lý System Prompt định dạng vai trò trợ lý chuyên nghiệp.
-    - Endpoint `/api/ai/chat` (Server-Sent Events / SSE cho streaming response).
-    - Endpoint `/api/ai/summarize`: gom 50-100 tin nhắn gần nhất của nhóm và gửi prompt yêu cầu tóm tắt.
-- **Thành viên C (Fullstack Media/AI):**
-  - Thiết kế prompt thông minh: Tóm tắt cuộc thảo luận, trích xuất việc cần làm (Task extraction), gợi ý câu trả lời nhanh (Smart Replies).
-  - Thử nghiệm tính năng ghi lại biên bản cuộc gọi thoại/video (nếu sử dụng Speech-to-Text API) để tạo AI Meeting Notes.
-  - Đảm bảo cơ chế Rate Limit và bảo mật API Key của AI.
-
----
-
-#### Tuần 7: Tối ưu hóa, Bảo mật, Docker hóa & Triển khai (Deployment)
-*Mục tiêu: Đóng gói toàn bộ hệ thống, kiểm thử hiệu năng, triển khai môi trường Production/Staging.*
-
-- **Thành viên A (Frontend):**
-  - Tinh chỉnh Responsive cho Tablet/Mobile Web.
-  - Tối ưu Bundle size, lazy loading các module nặng (Whiteboard, Video stream).
-  - Xử lý trải nghiệm người dùng khi mất kết nối mạng và tự động kết nối lại (Auto-reconnect toast).
-- **Thành viên B (Backend):**
-  - Viết `Dockerfile` cho Backend Spring Boot và Frontend.
-  - Tạo `docker-compose.yml` bao gồm: Spring Boot App, PostgreSQL, Redis, Coturn (TURN/STUN server).
-  - Cấu hình HTTPS & WSS (bắt buộc cho WebRTC để camera/mic được cấp quyền truy cập).
-- **Thành viên C (Fullstack Media/AI):**
-  - Kiểm thử tải và độ trễ (End-to-End Test): 2-4 người gọi video đồng thời + vẽ bảng + chat cùng lúc.
-  - Viết tài liệu hướng dẫn cài đặt, chạy dự án (`README.md` và tài liệu hướng dẫn chi tiết).
-- **Cả 3 thành viên:**
-  - UAT (User Acceptance Testing), tổng duyệt sản phẩm, chuẩn bị slide demo và video giới thiệu.
+  - Tổng duyệt sản phẩm (UAT), rà soát lỗi chéo (Cross-testing) và chốt phiên bản Release cuối cùng.
 
 ---
 
 ## 4. MA TRẬN PHÂN CHIA CÔNG VIỆC THEO TUẦN (WORK BREAKDOWN MATRIX)
 
-| Tuần | Thành viên A (Frontend Lead) | Thành viên B (Backend Lead) | Thành viên C (Media & AI) |
+| Tuần | Thành viên 1<br>*(Auth, Users & Realtime Chat)* | Thành viên 2<br>*(WebRTC Calling & Media)* | Thành viên 3<br>*(Whiteboard & AI Assistant)* |
 | :---: | :--- | :--- | :--- |
-| **Tuần 1** | Dựng Layout Teams, Auth UI, Chat Sidebar | Setup Spring Boot, DB Auth, JWT Filter | Thiết kế WebSocket STOMP, User Presence |
-| **Tuần 2** | STOMP Client, Chat Box UI, Modal Nhóm | Entity Message/Group, REST API, STOMP Broker | Upload File, Typing Indicator, Push Notification |
-| **Tuần 3** | Call Modal UI, Thanh điều khiển mic/loa | Signaling Server, Quản lý CallSession, STUN/TURN | WebRTC Audio Client, Xử lý VAD & Audio Stream |
-| **Tuần 4** | Video Grid UI, Nút Bật Cam & Chia sẻ màn | API Call Logs, Quản lý vòng đời phòng gọi | WebRTC Video + Screen Share (Mesh Topology) |
-| **Tuần 5** | Giao diện Whiteboard, Canvas Tools | DB Whiteboard, WebSocket Topic nét vẽ | Fabric.js Engine, Đồng bộ tọa độ & Con trỏ chuột |
-| **Tuần 6** | UI @AI Assistant, Markdown, Nút Tóm tắt | Tích hợp Spring AI, API Streaming SSE & Prompt | Prompt Engineering, Smart Replies, Meeting Notes |
-| **Tuần 7** | Tối ưu UI/UX, Responsive, Tự kết nối lại | Viết Dockerfile, `docker-compose.yml`, HTTPS/WSS | Kiểm thử WebRTC E2E, Tối ưu băng thông, Hướng dẫn |
+| **Tuần 1** | Setup Spring Security + JWT, Entity User, API Auth, UI Login/Register | Setup Spring WebSocket STOMP, Event Listener, Xin quyền Mic/Cam, PoC STOMP Client | Dựng App Shell Teams (Sidebar/Layout), Cấu hình Spring AI / Gemini API Health Check |
+| **Tuần 2** | Entity Conversation/Message, API Chat History, STOMP Chat, UI Chat 1-1 | Thiết kế Signaling STOMP, Entity CallSession, Modal nhận cuộc gọi, Audio Call P2P | Canvas Studio (Bút, Tẩy, Màu), Kênh STOMP nét vẽ, Entity WhiteboardSession |
+| **Tuần 3** | Chat Nhóm, Quản lý thành viên nhóm, Upload & Gửi ảnh/file qua chat | Video Call 1-1 P2P, PiP Video UI, Nút Bật/Tắt Webcam & Micro, Device selector | Công cụ hình học/Text, Đồng bộ nét vẽ mượt mà (throttle), Con trỏ chuột đa người dùng |
+| **Tuần 4** | User Presence (Online/Offline/Busy), Typing indicator, Tìm kiếm tin nhắn | Group Video Call (Mesh 3-5 người), Grid video tự co giãn, Nhận diện giọng nói VAD | Spring AI SSE Streaming API, Tích hợp bot `@AI-Assistant` vào chat, Render Markdown/Code |
+| **Tuần 5** | Ghim tin nhắn quan trọng, Thư viện lưu trữ File/Media của nhóm chat | Tính năng Chia sẻ màn hình (`getDisplayMedia`), Layout ưu tiên màn hình chia sẻ | Tích hợp Whiteboard vào phòng họp (Split-screen), AI Tóm tắt đoạn chat (Summarizer) |
+| **Tuần 6** | Reaction Emoji trên tin nhắn, Quote/Reply tin nhắn cũ, Phân trang tin nhắn | Cấu hình Coturn (STUN/TURN), Xử lý rớt mạng/Auto-reconnect, Entity CallLogs | AI Smart Replies (3 gợi ý trả lời nhanh), Biên bản cuộc họp tự động, Rate limit AI |
+| **Tuần 7** | Tối ưu UI/UX Dark/Light mode, Responsive, Viết Test Auth & Chat Controller | Viết Dockerfile, Docker Compose (App + DB + Coturn), Cấu hình HTTPS & WSS | Test E2E kết hợp (Gọi + Vẽ + AI), Viết README, API Doc, Chuẩn bị Slide & Video Demo |
 
 ---
 
@@ -216,18 +173,21 @@ Xây dựng nền tảng cộng tác và hội nghị trực tuyến thời gian
 erDiagram
     USERS ||--o{ CONVERSATION_MEMBERS : joins
     USERS ||--o{ MESSAGES : sends
+    USERS ||--o{ MESSAGE_REACTIONS : reacts
     CONVERSATIONS ||--o{ CONVERSATION_MEMBERS : has
     CONVERSATIONS ||--o{ MESSAGES : contains
     CONVERSATIONS ||--o{ WHITEBOARDS : owns
     CONVERSATIONS ||--o{ CALL_SESSIONS : hosts
+    CALL_SESSIONS ||--o{ CALL_PARTICIPANTS : includes
+    MESSAGES ||--o{ MESSAGE_REACTIONS : has
 
     USERS {
         uuid id PK
-        string email
+        string email UK
         string password_hash
         string display_name
         string avatar_url
-        string status
+        string status "ONLINE | OFFLINE | BUSY | AWAY"
         timestamp created_at
     }
 
@@ -251,10 +211,19 @@ erDiagram
         uuid id PK
         uuid conversation_id FK
         uuid sender_id FK
+        uuid reply_to_id FK
         text content
         string message_type "TEXT | IMAGE | FILE | SYSTEM | AI"
         string file_url
+        boolean is_pinned
         timestamp created_at
+    }
+
+    MESSAGE_REACTIONS {
+        uuid id PK
+        uuid message_id FK
+        uuid user_id FK
+        string emoji
     }
 
     CALL_SESSIONS {
@@ -265,6 +234,14 @@ erDiagram
         string status "ACTIVE | ENDED"
         timestamp started_at
         timestamp ended_at
+    }
+
+    CALL_PARTICIPANTS {
+        uuid id PK
+        uuid call_session_id FK
+        uuid user_id FK
+        timestamp joined_at
+        timestamp left_at
     }
 
     WHITEBOARDS {
@@ -280,13 +257,13 @@ erDiagram
 ## 6. QUY TRÌNH PHỐI HỢP VÀ QUẢN LÝ CODE (GIT WORKFLOW)
 
 1. **Nhánh chính (Branches):**
-   - `main`: Nhánh production, luôn ở trạng thái ổn định và có thể chạy được.
-   - `develop`: Nhánh tích hợp cho sprint hiện tại.
-   - `feature/tuanX-ten-tinh-nang`: Mỗi thành viên tạo nhánh riêng khi làm việc (ví dụ: `feature/w1-auth-jwt`, `feature/w3-webrtc-audio`).
+   - `main`: Nhánh production, luôn ở trạng thái ổn định và chạy được.
+   - `develop`: Nhánh tích hợp cho từng tuần.
+   - `feature/w[tuần]-[thành-viên]-[tên-tính-năng]`: Ví dụ `feature/w1-tv1-auth-jwt`, `feature/w1-tv2-webrtc-signaling`, `feature/w1-tv3-teams-layout`.
 2. **Quy định Pull Request (PR):**
-   - Không được push trực tiếp vào `main` hoặc `develop`.
-   - Mỗi PR phải có ít nhất 1 thành viên khác review và phê duyệt trước khi merge.
-   - Đảm bảo chạy build không phát sinh lỗi (`./mvnw clean compile` và `npm run build`).
-3. **Lịch họp hàng ngày / hàng tuần:**
-   - **Daily Standup (10-15 phút mỗi ngày):** Báo cáo 3 câu hỏi: *Hôm qua đã làm gì? Hôm nay sẽ làm gì? Có gặp vướng mắc/blocker nào không?*
-   - **Sprint Review & Planning (Cuối mỗi tuần):** Demo tính năng đã hoàn thành trong tuần và phân chia task chi tiết cho tuần tiếp theo.
+   - Không push trực tiếp vào `main` hoặc `develop`.
+   - Mỗi PR phải được ít nhất 1 thành viên khác review và phê duyệt trước khi merge.
+   - Đảm bảo mã nguồn biên dịch thành công (`./mvnw clean compile` và `npm run build`).
+3. **Quy trình họp và theo dõi:**
+   - **Daily Standup (10-15 phút):** Mỗi thành viên chia sẻ: *Hôm qua đã xong gì? Hôm nay làm gì? Có vướng mắc/blocker gì cần hỗ trợ không?*
+   - **Sprint Demo (Cuối mỗi tuần):** Cả 3 người cùng tích hợp nhánh vào `develop`, chạy thử luồng liên thông và đánh giá tiến độ.
