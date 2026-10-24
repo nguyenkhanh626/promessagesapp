@@ -157,16 +157,16 @@
 > **Trọng tâm:** Xây dựng bộ khung ứng dụng chuẩn Microsoft Teams (App Shell), cấu hình tích hợp Google Gemini API từ Backend và thiết kế cấu trúc dữ liệu Whiteboard.
 
 ### 📅 Ngày 1: Khởi tạo Dự án Frontend React Vite & Thiết lập Tailwind
-- [ ] **Sáng:** Tham gia họp Kick-off Sprint 1, thống nhất quy chuẩn kiến trúc Frontend.
-- [ ] **Sáng:** Tạo dự án Frontend bằng Vite: `npm create vite@latest frontend -- --template react-ts`.
-- [ ] **Chiều:** Cài đặt các package cần thiết:
-  - [ ] `lucide-react` (Bộ icon chuẩn phong cách Teams).
-  - [ ] `react-router-dom` (Định tuyến trang).
-  - [ ] `clsx` & `tailwind-merge` (Xử lý class CSS linh hoạt).
-- [ ] **Chiều:** Cấu hình file `tailwind.config.js` với bảng màu chuẩn Microsoft Teams:
-  - [ ] Màu thương hiệu (Teams Purple: `#464775`, `#6264A7`, `#5B5FC7`).
-  - [ ] Nền tối (Dark Background: `#201f1f`, Sub-dark: `#292929`, Border: `#383838`).
-  - [ ] Nền sáng (Light Background: `#f5f5f5`, White: `#ffffff`).
+- [x] **Sáng:** Tham gia họp Kick-off Sprint 1, thống nhất quy chuẩn kiến trúc Frontend.
+- [x] **Sáng:** Tạo dự án Frontend bằng Vite: `npm create vite@latest frontend -- --template react-ts`.
+- [x] **Chiều:** Cài đặt các package cần thiết:
+  - [x] `lucide-react` (Bộ icon chuẩn phong cách Teams).
+  - [x] `react-router-dom` (Định tuyến trang).
+  - [x] `clsx` & `tailwind-merge` (Xử lý class CSS linh hoạt).
+- [x] **Chiều:** Cấu hình file `tailwind.config.js` với bảng màu chuẩn Microsoft Teams:
+  - [x] Màu thương hiệu (Teams Purple: `#464775`, `#6264A7`, `#5B5FC7`).
+  - [x] Nền tối (Dark Background: `#201f1f`, Sub-dark: `#292929`, Border: `#383838`).
+  - [x] Nền sáng (Light Background: `#f5f5f5`, White: `#ffffff`).
 
 ### 📅 Ngày 2: Xây dựng ActivityBar & TopHeader chuẩn Teams
 - [ ] **Sáng:** Thiết kế Component `ActivityBar.tsx` (Thanh điều hướng biểu tượng dọc bên trái):
