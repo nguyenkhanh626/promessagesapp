@@ -87,32 +87,32 @@
 > **Trọng tâm:** Xây dựng hạ tầng WebSocket STOMP Server, xử lý sự kiện kết nối/ngắt kết nối và module xin quyền Media (Camera/Microphone) từ trình duyệt.
 
 ### 📅 Ngày 1: Cấu hình Spring WebSocket STOMP Server
-- [ ] **Sáng:** Tham gia họp Kick-off Sprint 1, thống nhất giao thức WebSocket Signaling.
-- [ ] **Sáng:** Vẽ sơ đồ tuần tự (Sequence Diagram) trao đổi bản tin Signaling giữa Frontend và Backend.
-- [ ] **Chiều:** Tạo class `WebSocketConfig.java` triển khai interface `WebSocketMessageBrokerConfigurer`.
-- [ ] **Chiều:** Đăng ký Stomp Endpoint: `registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS()`.
-- [ ] **Chiều:** Cấu hình Message Broker:
-  - [ ] Application Destination Prefix: `/app`
-  - [ ] Simple Broker Destination Prefixes: `/topic`, `/queue`
-  - [ ] User Destination Prefix: `/user`
+- [x] **Sáng:** Tham gia họp Kick-off Sprint 1, thống nhất giao thức WebSocket Signaling.
+- [x] **Sáng:** Vẽ sơ đồ tuần tự (Sequence Diagram) trao đổi bản tin Signaling giữa Frontend và Backend.
+- [x] **Chiều:** Tạo class `WebSocketConfig.java` triển khai interface `WebSocketMessageBrokerConfigurer`.
+- [x] **Chiều:** Đăng ký Stomp Endpoint: `registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS()`.
+- [x] **Chiều:** Cấu hình Message Broker:
+  - [x] Application Destination Prefix: `/app`
+  - [x] Simple Broker Destination Prefixes: `/topic`, `/queue`
+  - [x] User Destination Prefix: `/user`
 
 ### 📅 Ngày 2: Lắng nghe Sự kiện Kết nối & In-memory Session
-- [ ] **Sáng:** Xây dựng class `WebSocketEventListener.java`:
-  - [ ] Lắng nghe `@EventListener SessionConnectedEvent`: Ghi log session id kết nối mới.
-  - [ ] Lắng nghe `@EventListener SessionDisconnectEvent`: Ghi log session id ngắt kết nối.
-- [ ] **Chiều:** Tạo service `UserSessionRegistry.java` quản lý danh sách kết nối đang hoạt động trong bộ nhớ RAM.
-- [ ] **Chiều:** Định nghĩa lớp dữ liệu `SignalMessage.java` (gồm: `type`, `senderId`, `receiverId`, `payload`, `timestamp`).
-- [ ] **Chiều:** Định nghĩa enum `SignalType.java` (`PING`, `PONG`, `OFFER`, `ANSWER`, `ICE_CANDIDATE`).
+- [x] **Sáng:** Xây dựng class `WebSocketEventListener.java`:
+  - [x] Lắng nghe `@EventListener SessionConnectedEvent`: Ghi log session id kết nối mới.
+  - [x] Lắng nghe `@EventListener SessionDisconnectEvent`: Ghi log session id ngắt kết nối.
+- [x] **Chiều:** Tạo service `UserSessionRegistry.java` quản lý danh sách kết nối đang hoạt động trong bộ nhớ RAM.
+- [x] **Chiều:** Định nghĩa lớp dữ liệu `SignalMessage.java` (gồm: `type`, `senderId`, `receiverId`, `payload`, `timestamp`).
+- [x] **Chiều:** Định nghĩa enum `SignalType.java` (`PING`, `PONG`, `OFFER`, `ANSWER`, `ICE_CANDIDATE`).
 
 ### 📅 Ngày 3: Tích hợp Xác thực JWT vào WebSocket Handshake
-- [ ] **Sáng:** Phối hợp cùng TV1 để lấy cấu trúc JWT Token.
-- [ ] **Sáng:** Tạo class `AuthChannelInterceptor.java` kế thừa `ChannelInterceptor`.
-- [ ] **Chiều:** Cài đặt phương thức `preSend()`:
-  - [ ] Kiểm tra frame STOMP lệnh `StompCommand.CONNECT`.
-  - [ ] Trích xuất token từ Native Header `Authorization`.
-  - [ ] Gọi `JwtTokenProvider` để xác thực token và trích xuất username.
-  - [ ] Khởi tạo `UsernamePasswordAuthenticationToken` và gán vào `accessor.setUser(user)`.
-- [ ] **Chiều:** Đăng ký `AuthChannelInterceptor` vào `configureClientInboundChannel()` trong `WebSocketConfig`.
+- [x] **Sáng:** Phối hợp cùng TV1 để lấy cấu trúc JWT Token.
+- [x] **Sáng:** Tạo class `AuthChannelInterceptor.java` kế thừa `ChannelInterceptor`.
+- [x] **Chiều:** Cài đặt phương thức `preSend()`:
+  - [x] Kiểm tra frame STOMP lệnh `StompCommand.CONNECT`.
+  - [x] Trích xuất token từ Native Header `Authorization`.
+  - [x] Gọi `JwtTokenProvider` để xác thực token và trích xuất username.
+  - [x] Khởi tạo `UsernamePasswordAuthenticationToken` và gán vào `accessor.setUser(user)`.
+- [x] **Chiều:** Đăng ký `AuthChannelInterceptor` vào `configureClientInboundChannel()` trong `WebSocketConfig`.
 
 ### 📅 Ngày 4: Frontend Media Permissions (Camera & Microphone)
 - [ ] **Sáng:** Tạo custom hook `src/hooks/useMediaStream.ts`:
@@ -246,9 +246,9 @@
 | [ ] | **W1-TV1-04** | **TV1** | Trang Login & Register chuẩn Teams | 8h | Giao diện đẹp, validate form ngay trên client, responsive tốt, thông báo lỗi rõ ràng. |
 | [ ] | **W1-TV1-05** | **TV1** | Auth State, Axios Interceptor & Protected Routes | 6h | Lưu JWT vào localStorage; tự động gắn Bearer Token; chặn truy cập khi chưa login. |
 | [ ] | **W1-TV1-06** | **TV1** | Unit Test Auth & Cấu hình CORS | 6h | `./mvnw test` xanh 100%; trình duyệt không gặp lỗi CORS khi gọi API. |
-| [ ] | **W1-TV2-01** | **TV2** | Cấu hình WebSocket STOMP Broker (`/ws`) | 6h | Endpoint `/ws` chạy SockJS; định tuyến đúng prefix `/app`, `/topic`, `/queue`. |
-| [ ] | **W1-TV2-02** | **TV2** | WebSocket Event Listener & In-memory Session | 6h | Bắt chính xác sự kiện Connect và Disconnect; in log `sessionId` người dùng rõ ràng. |
-| [ ] | **W1-TV2-03** | **TV2** | Channel Interceptor xác thực JWT qua STOMP | 8h | Chặn kết nối STOMP nếu token sai; gán đúng Principal user khi xác thực thành công. |
+| [x] | **W1-TV2-01** | **TV2** | Cấu hình WebSocket STOMP Broker (`/ws`) | 6h | Endpoint `/ws` chạy SockJS; định tuyến đúng prefix `/app`, `/topic`, `/queue`. |
+| [x] | **W1-TV2-02** | **TV2** | WebSocket Event Listener & In-memory Session | 6h | Bắt chính xác sự kiện Connect và Disconnect; in log `sessionId` người dùng rõ ràng. |
+| [x] | **W1-TV2-03** | **TV2** | Channel Interceptor xác thực JWT qua STOMP | 8h | Chặn kết nối STOMP nếu token sai; gán đúng Principal user khi xác thực thành công. |
 | [ ] | **W1-TV2-04** | **TV2** | Hook `useMediaStream` xin quyền Mic/Cam | 6h | Hiển thị popup xin quyền; xử lý đầy đủ các lỗi từ chối quyền hoặc thiếu thiết bị. |
 | [ ] | **W1-TV2-05** | **TV2** | Component Media Device Checker (Preview Video/Audio) | 6h | Khung xem trước camera mượt mà; thanh âm lượng mic nhảy theo giọng nói; toggle mic/cam tốt. |
 | [ ] | **W1-TV2-06** | **TV2** | PoC STOMP Client kết nối hai chiều | 8h | Frontend gửi PING, Backend nhận và phản hồi PONG thành công, hiển thị log trên console. |
