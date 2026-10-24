@@ -33,6 +33,7 @@ public class SignalingController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final UserSessionRegistry sessionRegistry;
+    private final com.team17.chatapp.calling.service.CallService callService;
 
     /**
      * Endpoint kiểm tra kết nối hai chiều (Heartbeat Ping-Pong)
@@ -63,6 +64,7 @@ public class SignalingController {
 
     /**
      * Chuyển tiếp tín hiệu WebRTC 1-1 (Offer, Answer, ICE Candidate, Call Invite/Reject/End)
+     * Tự động lưu và cập nhật trạng thái cuộc gọi vào Database.
      * Client gửi lên: /app/call/signal
      */
     @MessageMapping("/call/signal")
@@ -76,6 +78,25 @@ public class SignalingController {
         if (message.getReceiverId() == null || message.getReceiverId().isBlank()) {
             log.warn("⚠️ Không thể chuyển tiếp tín hiệu do thiếu receiverId!");
             return;
+        }
+
+        // Tự động ghi nhận vòng đời cuộc gọi vào Database
+        if (message.getType() != null) {
+            String roomId = message.getRoomId() != null ? message.getRoomId() : (sender + "_" + message.getReceiverId());
+            message.setRoomId(roomId);
+
+            switch (message.getType()) {
+                case CALL_INVITE -> callService.initiateCall(
+                        sender,
+                        message.getReceiverId(),
+                        roomId,
+                        com.team17.chatapp.calling.entity.CallType.AUDIO
+                );
+                case CALL_ACCEPT -> callService.acceptCall(roomId, sender);
+                case CALL_REJECT -> callService.rejectCall(roomId);
+                case CALL_END -> callService.endCall(roomId);
+                default -> { /* Offer, Answer, ICE Candidate chỉ chuyển tiếp qua lại */ }
+            }
         }
 
         // Chuyển tiếp tới đúng hàng đợi riêng của người nhận (/user/{receiverId}/queue/signals)
@@ -172,5 +193,15 @@ public class SignalingController {
     public ResponseEntity<ApiResponse<Set<String>>> getRoomParticipants(@PathVariable String roomId) {
         Set<String> participants = sessionRegistry.getRoomParticipants(roomId);
         return ResponseEntity.ok(ApiResponse.success(participants));
+    }
+
+    /**
+     * REST Endpoint lấy lịch sử cuộc gọi của người dùng (Call Logs)
+     */
+    @ResponseBody
+    @GetMapping("/api/call/history/{userId}")
+    public ResponseEntity<ApiResponse<java.util.List<com.team17.chatapp.calling.entity.CallSession>>> getCallHistory(@PathVariable String userId) {
+        java.util.List<com.team17.chatapp.calling.entity.CallSession> history = callService.getCallHistory(userId);
+        return ResponseEntity.ok(ApiResponse.success(history));
     }
 }
