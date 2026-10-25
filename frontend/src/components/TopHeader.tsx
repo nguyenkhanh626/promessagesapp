@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, CircleHelp, Search, UserRound, LogOut } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 type PresenceStatus = 'Đang hoạt động' | 'Bận' | 'Không làm phiền' | 'Ngoại tuyến'
 
@@ -24,6 +25,7 @@ export function TopHeader() {
   const searchRef = useRef<HTMLInputElement>(null)
   const accountMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const { user, logout } = useAuth()
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -56,6 +58,14 @@ export function TopHeader() {
     }
   }, [])
 
+  const initial = user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'
+
+  const handleLogoutClick = async () => {
+    setIsAccountMenuOpen(false)
+    await logout()
+    navigate('/login')
+  }
+
   return (
     <header className="top-header">
       <Link className="brand" to="/chat" aria-label="ProMessages - Trang trò chuyện">
@@ -70,7 +80,7 @@ export function TopHeader() {
         <input
           ref={searchRef}
           type="search"
-          placeholder="Tìm kiếm"
+          placeholder="Tìm kiếm (Ctrl + E)"
           aria-label="Tìm kiếm"
         />
         <kbd>Ctrl E</kbd>
@@ -89,24 +99,32 @@ export function TopHeader() {
             aria-haspopup="menu"
             onClick={() => setIsAccountMenuOpen((open) => !open)}
           >
-            <span className="avatar">
-              U
+            <span className="avatar overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+              ) : (
+                initial
+              )}
               <span className={`presence-dot ${statusClass[status]}`} />
             </span>
-            <span className="account-name">Người dùng</span>
+            <span className="account-name">{user?.displayName || 'Người dùng'}</span>
             <ChevronDown size={16} aria-hidden="true" />
           </button>
 
           {isAccountMenuOpen && (
             <div className="account-menu" role="menu">
               <div className="account-summary">
-                <span className="avatar avatar-large">
-                  U
+                <span className="avatar avatar-large overflow-hidden">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+                  ) : (
+                    initial
+                  )}
                   <span className={`presence-dot ${statusClass[status]}`} />
                 </span>
                 <div>
-                  <strong>Người dùng</strong>
-                  <span>Tài khoản ProMessages</span>
+                  <strong>{user?.displayName || 'Người dùng'}</strong>
+                  <span className="truncate max-w-[180px] block">{user?.email || 'Tài khoản ProMessages'}</span>
                 </div>
               </div>
 
@@ -143,13 +161,10 @@ export function TopHeader() {
 
               <div className="menu-divider" />
               <button
-                className="menu-item"
+                className="menu-item text-red-400 hover:text-red-300"
                 type="button"
                 role="menuitem"
-                onClick={() => {
-                  navigate('/login')
-                  setIsAccountMenuOpen(false)
-                }}
+                onClick={handleLogoutClick}
               >
                 <LogOut size={17} aria-hidden="true" />
                 Đăng xuất

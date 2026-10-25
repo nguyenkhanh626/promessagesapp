@@ -1,5 +1,7 @@
 package com.team17.chatapp.websocket.interceptor;
 
+import com.team17.chatapp.security.JwtTokenProvider;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -19,7 +21,10 @@ import java.util.Collections;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AuthChannelInterceptor implements ChannelInterceptor {
+
+    private final JwtTokenProvider jwtTokenProvider;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -32,10 +37,14 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
 
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7).trim();
-                log.info("🔑 [STOMP Auth] Nhận được Bearer Token trong frame CONNECT: {}", token.substring(0, Math.min(token.length(), 15)) + "...");
-                
-                // Trích xuất username hoặc userId từ token (có thể gọi JwtTokenProvider khi TV1 hoàn tất)
-                username = extractUsernameFromToken(token);
+                log.info("🔑 [STOMP Auth] Nhận được Bearer Token trong frame CONNECT: {}",
+                        token.substring(0, Math.min(token.length(), 15)) + "...");
+
+                if (jwtTokenProvider.validateToken(token)) {
+                    username = jwtTokenProvider.getUsernameFromToken(token);
+                } else {
+                    log.warn("❌ [STOMP Auth] Token JWT không hợp lệ hoặc đã hết hạn");
+                }
             } else {
                 // Hỗ trợ truyền header đơn giản "token" hoặc "user" cho môi trường test/dev PoC
                 String userHeader = accessor.getFirstNativeHeader("user");
@@ -55,30 +64,5 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
         }
 
         return message;
-    }
-
-    /**
-     * Tạm thời giải mã định dạng cơ bản hoặc JWT payload (Base64) để lấy subject trước khi TV1 ghép JwtTokenProvider
-     */
-    private String extractUsernameFromToken(String token) {
-        try {
-            // Nếu là JWT có dạng header.payload.signature
-            String[] parts = token.split("\\.");
-            if (parts.length >= 2) {
-                String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
-                // Tìm "sub":"..." trong JSON payload
-                int subIndex = payload.indexOf("\"sub\":\"");
-                if (subIndex != -1) {
-                    int start = subIndex + 7;
-                    int end = payload.indexOf("\"", start);
-                    if (end != -1) {
-                        return payload.substring(start, end);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Không thể parse trực tiếp JWT payload: {}", e.getMessage());
-        }
-        return "User-" + Math.abs(token.hashCode() % 10000);
     }
 }
