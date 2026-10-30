@@ -5,11 +5,11 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { ChatPage } from './pages/ChatPage'
 import './App.css'
 
-const pages = [
+const placeholderPages = [
   { path: 'activity', title: 'Hoạt động', description: 'Thông báo và cập nhật của bạn sẽ xuất hiện tại đây.' },
-  { path: 'chat', title: 'Trò chuyện', description: 'Các cuộc trò chuyện gần đây sẽ được hiển thị tại đây.' },
   { path: 'teams', title: 'Nhóm', description: 'Không gian nhóm và các kênh làm việc của bạn.' },
   { path: 'calls', title: 'Cuộc gọi', description: 'Lịch sử và các cuộc gọi của bạn.' },
   { path: 'whiteboard', title: 'Bảng vẽ', description: 'Không gian cộng tác bảng vẽ trực tuyến.' },
@@ -24,10 +24,11 @@ function TeamsLayout() {
       <TopHeader />
       <div className="teams-workspace">
         <ActivityBar />
-        <main className="page-content">
+        <main className="page-content overflow-hidden">
           <Routes>
             <Route path="/" element={<Navigate to="/chat" replace />} />
-            {pages.map(({ path, title, description }) => (
+            <Route path="chat" element={<ChatPage />} />
+            {placeholderPages.map(({ path, title, description }) => (
               <Route
                 key={path}
                 path={path}
