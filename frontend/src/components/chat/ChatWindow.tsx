@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Phone, Video, Send, Smile, Paperclip, MoreVertical, MessageSquare } from 'lucide-react'
 import type { Conversation, Message } from '../../types/chat'
 import type { User } from '../../types/auth'
+import { useCall } from '../../context/CallContext'
 
 interface ChatWindowProps {
   conversation: Conversation | null
@@ -20,6 +21,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 }) => {
   const [inputText, setInputText] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { startCall, callStatus } = useCall()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -41,6 +43,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       e.preventDefault()
       handleSend()
     }
+  }
+
+  const handleStartVoiceCall = () => {
+    if (!conversation) return
+    const otherId = conversation.otherUser?.id
+    if (!otherId) return
+
+    startCall({
+      id: otherId,
+      displayName: conversation.otherUser?.displayName || conversation.name || 'Người dùng',
+      avatarUrl: conversation.otherUser?.avatarUrl || conversation.avatarUrl,
+    })
   }
 
   const formatMessageTime = (dateStr: string) => {
@@ -100,7 +114,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors"
+            onClick={handleStartVoiceCall}
+            disabled={callStatus !== 'IDLE' || !conversation.otherUser}
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors disabled:opacity-40"
             title="Bắt đầu cuộc gọi thoại (WebRTC Audio)"
           >
             <Phone size={18} />
@@ -222,4 +238,3 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   )
 }
-

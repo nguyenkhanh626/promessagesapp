@@ -11,6 +11,7 @@ import com.team17.chatapp.chat.entity.ConversationMember;
 import com.team17.chatapp.chat.entity.ConversationType;
 import com.team17.chatapp.chat.entity.MemberRole;
 import com.team17.chatapp.chat.entity.Message;
+import com.team17.chatapp.chat.entity.MessageType;
 import com.team17.chatapp.chat.repository.ConversationMemberRepository;
 import com.team17.chatapp.chat.repository.ConversationRepository;
 import com.team17.chatapp.chat.repository.MessageRepository;
@@ -214,14 +215,14 @@ public class ChatServiceImpl implements ChatService {
                 .conversationId(conversationId)
                 .senderId(senderId)
                 .content(request.getContent().trim())
-                .messageType(request.getMessageType())
+                .messageType(request.getMessageType() != null ? request.getMessageType() : MessageType.TEXT)
                 .fileUrl(request.getFileUrl())
                 .build();
 
         Message savedMessage = messageRepository.save(message);
 
         conversation.setLastMessageContent(savedMessage.getContent());
-        conversation.setLastMessageAt(savedMessage.getCreatedAt());
+        conversation.setLastMessageAt(savedMessage.getCreatedAt() != null ? savedMessage.getCreatedAt() : LocalDateTime.now());
         conversationRepository.save(conversation);
 
         User sender = userRepository.findById(senderId).orElse(null);
@@ -245,4 +246,7 @@ public class ChatServiceImpl implements ChatService {
         return users.stream().map(UserDto::from).collect(Collectors.toList());
     }
 }
+
+
+
 

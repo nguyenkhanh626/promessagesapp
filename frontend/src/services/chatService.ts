@@ -28,7 +28,7 @@ export const chatService = {
   async sendMessage(conversationId: string, payload: SendMessagePayload): Promise<Message> {
     const response = await apiClient.post<ApiResponse<Message>>(
       `/conversations/${conversationId}/messages`,
-      payload
+      { messageType: 'TEXT', ...payload }
     )
     return response.data.data
   },
@@ -38,4 +38,5 @@ export const chatService = {
     return response.data.data
   },
 }
+
 

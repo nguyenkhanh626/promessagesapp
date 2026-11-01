@@ -13,6 +13,9 @@ public enum SignalType {
     CALL_INVITE,        // Người gọi gửi lời mời (ring)
     CALL_ACCEPT,        // Người nhận đồng ý cuộc gọi
     CALL_REJECT,        // Người nhận từ chối cuộc gọi
+    CALL_CANCEL,        // Người gọi chủ động cúp máy trước khi người nhận bắt máy
+    CALL_BUSY,          // Người nhận đang bận trong một cuộc gọi khác
+    CALL_TIMEOUT,       // Hết thời gian chờ (sau 30s) mà không có phản hồi
     CALL_END,           // Một trong hai bên kết thúc cuộc gọi
 
     CALL_OFFER,         // WebRTC SDP Offer

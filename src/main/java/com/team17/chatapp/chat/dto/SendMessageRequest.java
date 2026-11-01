@@ -20,5 +20,9 @@ public class SendMessageRequest {
     private MessageType messageType = MessageType.TEXT;
 
     private String fileUrl;
+
+    public MessageType getMessageType() {
+        return messageType != null ? messageType : MessageType.TEXT;
+    }
 }
 

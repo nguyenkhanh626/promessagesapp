@@ -36,4 +36,36 @@ public class CallParticipant extends BaseEntity {
 
     @Column(name = "left_at")
     private LocalDateTime leftAt;
+
+    public UUID getCallSessionId() {
+        return callSessionId;
+    }
+
+    public void setCallSessionId(UUID callSessionId) {
+        this.callSessionId = callSessionId;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    public LocalDateTime getJoinedAt() {
+        return joinedAt;
+    }
+
+    public void setJoinedAt(LocalDateTime joinedAt) {
+        this.joinedAt = joinedAt;
+    }
+
+    public LocalDateTime getLeftAt() {
+        return leftAt;
+    }
+
+    public void setLeftAt(LocalDateTime leftTime) {
+        this.leftAt = leftTime;
+    }
 }

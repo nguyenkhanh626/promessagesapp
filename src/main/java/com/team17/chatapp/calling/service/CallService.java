@@ -28,6 +28,30 @@ public class CallService {
     private final CallSessionRepository callSessionRepository;
     private final CallParticipantRepository callParticipantRepository;
 
+    private static final List<CallStatus> ACTIVE_CALL_STATUSES = List.of(CallStatus.RINGING, CallStatus.CONNECTED);
+
+    /**
+     * Kiểm tra xem người dùng có đang bận trong một cuộc gọi khác không (đang reo hoặc đang đàm thoại)
+     */
+    @Transactional(readOnly = true)
+    public boolean isUserInCall(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        return callSessionRepository.existsByUserIdAndStatusIn(userId, ACTIVE_CALL_STATUSES);
+    }
+
+    /**
+     * Lấy phiên cuộc gọi đang hoạt động của người dùng (nếu có)
+     */
+    @Transactional(readOnly = true)
+    public Optional<CallSession> getActiveSession(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return Optional.empty();
+        }
+        return callSessionRepository.findActiveSessionsByUserId(userId, ACTIVE_CALL_STATUSES).stream().findFirst();
+    }
+
     /**
      * Khởi tạo cuộc gọi mới (Trạng thái RINGING)
      */
@@ -72,18 +96,24 @@ public class CallService {
 
         CallSession session = optionalSession.get();
         session.setStatus(CallStatus.CONNECTED);
-        session.setStartedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        session.setStartedAt(now);
         callSessionRepository.save(session);
 
-        // Lưu thông tin người nhận tham gia cuộc gọi
-        CallParticipant participant = CallParticipant.builder()
-                .callSessionId(session.getId())
-                .userId(receiverId)
-                .joinedAt(LocalDateTime.now())
-                .build();
-        callParticipantRepository.save(participant);
+        // Lưu hoặc cập nhật thông tin người nhận tham gia cuộc gọi
+        Optional<CallParticipant> existingParticipant = callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), receiverId);
+        if (existingParticipant.isEmpty()) {
+            CallParticipant participant = CallParticipant.builder()
+                    .callSessionId(session.getId())
+                    .userId(receiverId)
+                    .joinedAt(now)
+                    .build();
+            callParticipantRepository.save(participant);
+        }
 
-        log.info("✅ [CallService] Cuộc gọi '{}' đã kết nối thành công lúc {}", session.getId(), session.getStartedAt());
+        log.info("✅ [CallService] Cuộc gọi '{}' (Room: '{}') đã kết nối thành công lúc {}", 
+                session.getId(), roomId, session.getStartedAt());
         return session;
     }
 
@@ -97,8 +127,69 @@ public class CallService {
 
         CallSession session = optionalSession.get();
         session.setStatus(CallStatus.REJECTED);
-        session.setEndedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        session.setEndedAt(now);
         session.setDurationSeconds(0L);
+        closeParticipants(session.getId(), now);
+
+        log.info("🚫 [CallService] Cuộc gọi room '{}' đã bị từ chối", roomId);
+        return callSessionRepository.save(session);
+    }
+
+    /**
+     * Người gọi chủ động hủy cuộc gọi khi đang đổ chuông (chưa ai bắt máy)
+     */
+    @Transactional
+    public CallSession cancelCall(String roomId) {
+        Optional<CallSession> optionalSession = callSessionRepository.findByRoomId(roomId);
+        if (optionalSession.isEmpty()) return null;
+
+        CallSession session = optionalSession.get();
+        session.setStatus(CallStatus.CANCELLED);
+        LocalDateTime now = LocalDateTime.now();
+        session.setEndedAt(now);
+        session.setDurationSeconds(0L);
+        closeParticipants(session.getId(), now);
+
+        log.info("🛑 [CallService] Người gọi đã hủy cuộc gọi room '{}'", roomId);
+        return callSessionRepository.save(session);
+    }
+
+    /**
+     * Cuộc gọi bị timeout do không có phản hồi sau 30-45 giây
+     */
+    @Transactional
+    public CallSession timeoutCall(String roomId) {
+        Optional<CallSession> optionalSession = callSessionRepository.findByRoomId(roomId);
+        if (optionalSession.isEmpty()) return null;
+
+        CallSession session = optionalSession.get();
+        session.setStatus(CallStatus.MISSED);
+        LocalDateTime now = LocalDateTime.now();
+        session.setEndedAt(now);
+        session.setDurationSeconds(0L);
+        closeParticipants(session.getId(), now);
+
+        log.info("⌛ [CallService] Cuộc gọi room '{}' đã bị timeout (MISSED)", roomId);
+        return callSessionRepository.save(session);
+    }
+
+    /**
+     * Đánh dấu cuộc gọi bận (người nhận đang trong cuộc gọi khác)
+     */
+    @Transactional
+    public CallSession markCallBusy(String roomId) {
+        Optional<CallSession> optionalSession = callSessionRepository.findByRoomId(roomId);
+        if (optionalSession.isEmpty()) return null;
+
+        CallSession session = optionalSession.get();
+        session.setStatus(CallStatus.BUSY);
+        LocalDateTime now = LocalDateTime.now();
+        session.setEndedAt(now);
+        session.setDurationSeconds(0L);
+        closeParticipants(session.getId(), now);
+
+        log.info("📴 [CallService] Người nhận trong room '{}' đang bận (BUSY)", roomId);
         return callSessionRepository.save(session);
     }
 
@@ -122,8 +213,10 @@ public class CallService {
             session.setDurationSeconds(0L);
         }
 
-        log.info("⏹️ [CallService] Cuộc gọi '{}' đã kết thúc. Tổng thời lượng: {} giây",
-                session.getId(), session.getDurationSeconds());
+        closeParticipants(session.getId(), now);
+
+        log.info("⏹️ [CallService] Cuộc gọi '{}' (Room: '{}') đã kết thúc. Tổng thời lượng: {} giây",
+                session.getId(), roomId, session.getDurationSeconds());
 
         return callSessionRepository.save(session);
     }
@@ -142,5 +235,15 @@ public class CallService {
     @Transactional(readOnly = true)
     public Optional<CallSession> getCallByRoomId(String roomId) {
         return callSessionRepository.findByRoomId(roomId);
+    }
+
+    private void closeParticipants(UUID sessionId, LocalDateTime leftTime) {
+        List<CallParticipant> participants = callParticipantRepository.findByCallSessionId(sessionId);
+        for (CallParticipant p : participants) {
+            if (p.getLeftAt() == null) {
+                p.setLeftAt(leftTime);
+                callParticipantRepository.save(p);
+            }
+        }
     }
 }
