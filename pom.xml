@@ -25,7 +25,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
-
 		<!-- WebSocket (STOMP for Chat, Signaling, Whiteboard) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

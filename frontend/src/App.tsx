@@ -9,6 +9,8 @@ import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ChatPage } from './pages/ChatPage'
 import { CallsPage } from './pages/CallsPage'
+import { WhiteboardPage } from './pages/WhiteboardPage'
+import { AiAssistantPage } from './pages/AiAssistantPage'
 import { IncomingCallModal } from './components/calling/IncomingCallModal'
 import { ActiveCallModal } from './components/calling/ActiveCallModal'
 import { FloatingCallBar } from './components/calling/FloatingCallBar'
@@ -17,8 +19,6 @@ import './App.css'
 const placeholderPages = [
   { path: 'activity', title: 'Hoạt động', description: 'Thông báo và cập nhật của bạn sẽ xuất hiện tại đây.' },
   { path: 'teams', title: 'Nhóm', description: 'Không gian nhóm và các kênh làm việc của bạn.' },
-  { path: 'whiteboard', title: 'Bảng vẽ', description: 'Không gian cộng tác bảng vẽ trực tuyến.' },
-  { path: 'ai-assistant', title: 'Trợ lý AI', description: 'Trò chuyện với trợ lý AI của nhóm.' },
   { path: 'settings', title: 'Cài đặt', description: 'Tùy chỉnh trải nghiệm ứng dụng.' },
   { path: 'profile', title: 'Thông tin cá nhân', description: 'Thông tin tài khoản của bạn.' },
 ]
@@ -35,6 +35,8 @@ function TeamsLayout() {
               <Route path="/" element={<Navigate to="/chat" replace />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="calls" element={<CallsPage />} />
+              <Route path="whiteboard" element={<WhiteboardPage />} />
+              <Route path="ai-assistant" element={<AiAssistantPage />} />
               {placeholderPages.map(({ path, title, description }) => (
                 <Route
                   key={path}

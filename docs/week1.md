@@ -190,46 +190,47 @@
 - [x] **Chiều:** Bàn giao khung source Frontend chuẩn cho TV1 và TV2.
 
 ### 📅 Ngày 4: Khảo sát & Cấu hình Google Gemini AI Backend
-- [ ] **Sáng:** Đăng ký tài khoản Google AI Studio, lấy API Key Gemini (model `gemini-1.5-flash`).
-- [ ] **Sáng:** Cấu hình biến môi trường an toàn trong `src/main/resources/application.yml`:
+- [x] **Sáng:** Đăng ký tài khoản Google AI Studio, lấy API Key Gemini (model `gemini-1.5-flash`).
+- [x] **Sáng:** Cấu hình biến môi trường an toàn trong `src/main/resources/application.yml`:
   ```yaml
   gemini:
-    api-key: ${GEMINI_API_KEY}
-    model: gemini-1.5-flash
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     base-url: https://generativelanguage.googleapis.com/v1beta
   ```
-- [ ] **Chiều:** Viết class cấu hình `AiConfig.java` khởi tạo `RestClient` hoặc `WebClient` với cấu hình connection timeout (5s) và read timeout (15s).
+- [x] **Chiều:** Viết class cấu hình `AiConfig.java` khởi tạo `RestClient` hoặc `WebClient` với cấu hình connection timeout (5s) và read timeout (15s).
 
 ### 📅 Ngày 5: Xây dựng API AI Health Check & Test Prompt
-- [ ] **Sáng:** Tạo các DTO cho phân hệ AI:
-  - [ ] `AiPromptRequest.java` (`prompt`, `context`).
-  - [ ] `AiPromptResponse.java` (`reply`, `status`, `tokensUsed`).
-- [ ] **Sáng:** Xây dựng `AiClientService.java`:
-  - [ ] Hàm `testConnection()` kiểm tra trạng thái hoạt động của Gemini API.
-  - [ ] Hàm `sendPrompt(String prompt)` gửi câu hỏi và trích xuất câu trả lời văn bản.
-  - [ ] Cơ chế Fallback: Trả về thông báo thân thiện nếu mất kết nối hoặc hết quota.
-- [ ] **Chiều:** Tạo REST Controller `AiController.java`:
-  - [ ] `GET /api/ai/health`: Kiểm tra sức khỏe kết nối AI.
-  - [ ] `POST /api/ai/test-prompt`: Gửi câu hỏi thử nghiệm và nhận câu trả lời.
+- [x] **Sáng:** Tạo các DTO cho phân hệ AI:
+  - [x] `AiPromptRequest.java` (`prompt`, `context`).
+  - [x] `AiPromptResponse.java` (`reply`, `status`, `tokensUsed`).
+- [x] **Sáng:** Xây dựng `AiClientService.java`:
+  - [x] Hàm `testConnection()` kiểm tra trạng thái hoạt động của Gemini API.
+  - [x] Hàm `sendPrompt(String prompt)` gửi câu hỏi và trích xuất câu trả lời văn bản.
+  - [x] Cơ chế Fallback: Trả về thông báo thân thiện nếu mất kết nối hoặc hết quota.
+- [x] **Chiều:** Tạo REST Controller `AiController.java`:
+  - [x] `GET /api/ai/health`: Kiểm tra sức khỏe kết nối AI.
+  - [x] `POST /api/ai/test-prompt`: Gửi câu hỏi thử nghiệm và nhận câu trả lời.
 - [ ] **Chiều:** Kiểm thử bằng Postman, xác nhận Backend gọi sang Google Gemini thành công.
 
 ### 📅 Ngày 6: Thiết kế Schema Nét vẽ Whiteboard & Mockup Pages
-- [ ] **Sáng:** Thiết kế cấu trúc dữ liệu lưu trữ nét vẽ Canvas (Vector Model):
-  - [ ] Định nghĩa `WhiteboardShape.ts` trên Frontend:
+- [x] **Sáng:** Thiết kế cấu trúc dữ liệu lưu trữ nét vẽ Canvas (Vector Model):
+  - [x] Định nghĩa `WhiteboardShape.ts` trên Frontend:
     - `id`: chuỗi UUID duy nhất cho từng nét vẽ/vật thể.
     - `type`: `FREEHAND` | `RECTANGLE` | `CIRCLE` | `LINE` | `TEXT`.
     - `points`: mảng các tọa độ `[{x: number, y: number}]`.
     - `strokeColor`: mã màu hex.
     - `strokeWidth`: độ dày nét vẽ (1px - 20px).
     - `authorId`: ID người vẽ để phân biệt màu sắc con trỏ.
-  - [ ] Tạo Entity/POJO tương ứng `WhiteboardData.java` bên Backend.
-- [ ] **Chiều:** Xây dựng trang Mockup `WhiteboardPage.tsx` và `AiAssistantPage.tsx`:
-  - [ ] Trang AI Assistant: Khung hội thoại mẫu, hiển thị badge xanh `● AI Engine Ready (Gemini Connected)`.
-  - [ ] Nút bấm gọi API `/api/ai/health` trực tiếp từ Frontend để kiểm tra trạng thái liên thông.
+  - [x] Tạo Entity/POJO tương ứng `WhiteboardData.java` bên Backend.
+- [x] **Chiều:** Xây dựng trang Mockup `WhiteboardPage.tsx` và `AiAssistantPage.tsx`:
+  - [x] Trang AI Assistant: Khung hội thoại mẫu, hiển thị badge xanh `● AI Engine Ready (Gemini Connected)` khi API xác nhận kết nối.
+  - [x] Nút bấm gọi API `/api/ai/health` trực tiếp từ Frontend để kiểm tra trạng thái liên thông.
 
 ### 📅 Ngày 7: Tích hợp Toàn hệ thống & Hoàn tất Pull Request
-- [ ] **Sáng:** Hỗ trợ TV1 nhúng trang Login/Register vào router và TV2 nhúng PreCallLobby vào trang Calls.
-- [ ] **Sáng:** Kiểm tra build production của Frontend: `npm run build` không phát sinh lỗi TypeScript.
+- [x] **Sáng:** Hỗ trợ TV1 nhúng trang Login/Register vào router. (PreCallLobby chưa có trong source của TV2 để tích hợp.)
+- [ ] **Sáng:** Hỗ trợ TV2 nhúng PreCallLobby vào trang Calls.
+- [x] **Sáng:** Kiểm tra build production của Frontend: `npm run build` không phát sinh lỗi TypeScript.
 - [ ] **Chiều:** Tạo Pull Request `feature/w1-tv3-teams-layout-ai` vào nhánh `develop`, review code chéo.
 - [ ] **Chiều:** Tham gia Sprint Review: Trình diễn App Shell Teams, chuyển tab mượt mà và kết quả phản hồi của AI Health Check.
 
@@ -254,9 +255,9 @@
 | [x] | **W1-TV3-01** | **TV3** | Khởi tạo Vite React TS & Tailwind Theme Tokens | 6h | Lệnh `npm run dev` chạy mượt mà; Tailwind nhận diện đúng bảng màu Teams (Dark/Light). |
 | [x] | **W1-TV3-02** | **TV3** | Xây dựng ActivityBar & TopHeader Teams | 8h | Thanh Activity Bar dọc và Top Header chuẩn pixel; tooltip và trạng thái avatar hoạt động tốt. |
 | [x] | **W1-TV3-03** | **TV3** | Dựng App Shell Layout & Cấu hình Router | 8h | MainLayout linh hoạt, Sidebar chuyển đổi đúng theo tab; route hoạt động không lỗi giật màn hình. |
-| [ ] | **W1-TV3-04** | **TV3** | Cấu hình kết nối Gemini REST Client Backend | 6h | Ẩn an toàn API Key trong biến môi trường; khởi tạo RestClient gọi sang Google AI Studio. |
+| [x] | **W1-TV3-04** | **TV3** | Cấu hình kết nối Gemini REST Client Backend | 6h | Ẩn an toàn API Key trong biến môi trường; khởi tạo RestClient gọi sang Google AI Studio. |
 | [ ] | **W1-TV3-05** | **TV3** | Viết Service & API `GET /api/ai/health` | 6h | Endpoint trả về JSON trạng thái kết nối AI trong < 2 giây; có cơ chế try-catch fallback. |
-| [ ] | **W1-TV3-06** | **TV3** | Thiết kế Schema dữ liệu nét vẽ Canvas & Mockup Page | 6h | Định nghĩa TypeScript & Model Java nét vẽ vector; trang Whiteboard và AI sẵn sàng cho Tuần 2. |
+| [x] | **W1-TV3-06** | **TV3** | Thiết kế Schema dữ liệu nét vẽ Canvas & Mockup Page | 6h | Định nghĩa TypeScript & Model Java nét vẽ vector; trang Whiteboard và AI sẵn sàng cho Tuần 2. |
 
 ---
 
@@ -266,7 +267,7 @@
 
 - [x] **Tiêu chí 1:** Hạ tầng Docker (PostgreSQL 16, Redis 7, PgAdmin) khởi động ổn định bằng lệnh `docker compose up -d`.
 - [x] **Tiêu chí 2:** Backend Spring Boot build thành công không lỗi cú pháp: `./mvnw clean compile`.
-- [ ] **Tiêu chí 3:** Frontend React build production thành công không lỗi TypeScript: `npm run build`.
+- [x] **Tiêu chí 3:** Frontend React build production thành công không lỗi TypeScript: `npm run build`.
 - [x] **Tiêu chí 4:** Đăng ký tài khoản mới và Đăng nhập thành công, nhận JWT Token và lưu vào LocalStorage của trình duyệt.
 - [x] **Tiêu chí 5:** Chặn truy cập vào ứng dụng khi chưa đăng nhập (Protected Routes hoạt động đúng).
 - [x] **Tiêu chí 6:** Kết nối WebSocket STOMP handshake thành công và xác thực hợp lệ qua JWT Token.

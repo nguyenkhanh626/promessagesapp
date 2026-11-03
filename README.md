@@ -22,6 +22,12 @@ ProMessages là ứng dụng trò chuyện (Chat 1-1) và gọi thoại thời g
    - Hộp thoại nhận cuộc gọi (`IncomingCallModal`), hộp thoại đàm thoại (`ActiveCallModal`) và thanh điều khiển thu nhỏ (`FloatingCallBar` - vừa gọi vừa chat).
    - Lịch sử cuộc gọi (`/calls`) phân loại rõ ràng: Cuộc gọi đến, Cuộc gọi đi, Cuộc gọi nhỡ, tính thời lượng đàm thoại chính xác.
 
+4. **Trợ lý AI Gemini:**
+   - Backend kết nối Google Gemini bằng API key lấy từ biến môi trường, không lưu khóa trong mã nguồn.
+   - Trang `/ai-assistant` kiểm tra trạng thái Gemini và gửi prompt thử nghiệm.
+5. **Bảng vẽ cộng tác:**
+   - Trang `/whiteboard` và schema nét vẽ vector trên Frontend/Backend làm nền tảng cho chức năng cộng tác tuần 2.
+
 ---
 
 ## 🛠 Yêu cầu hệ thống (Prerequisites)
@@ -59,6 +65,17 @@ docker compose ps
 
 ### Bước 2: Khởi động Backend (Spring Boot)
 
+Gemini API key là tùy chọn để ứng dụng khởi động, nhưng cần thiết để kiểm tra kết nối và gửi prompt. Tạo key trong Google AI Studio rồi đặt biến môi trường trong terminal chạy Backend; không đưa key vào `application.yml` hoặc Git:
+
+- **Trên Windows PowerShell:**
+  ```powershell
+  $env:GEMINI_API_KEY = "your-google-ai-studio-api-key"
+  ```
+- **Trên Linux / macOS:**
+  ```bash
+  export GEMINI_API_KEY="your-google-ai-studio-api-key"
+  ```
+
 Tại thư mục gốc dự án, sử dụng Maven Wrapper để chạy Backend:
 
 - **Trên Windows (PowerShell / Command Prompt):**
@@ -75,6 +92,7 @@ Server Backend sẽ khởi động tại:
 👉 **API Server:** `http://localhost:8080`  
 👉 **WebSocket Endpoint:** `ws://localhost:8080/ws`  
 👉 **Kiểm tra trạng thái máy chủ:** `http://localhost:8080/api/call/status`
+👉 **Kiểm tra Gemini (cần JWT):** `GET http://localhost:8080/api/ai/health`
 
 ---
 
@@ -161,8 +179,8 @@ promessagesapp/
     │   │   └── calling/        # IncomingCallModal, ActiveCallModal, FloatingCallBar
     │   ├── context/            # AuthContext (quản lý login), CallContext (State Machine WebRTC)
     │   ├── hooks/              # useMediaStream, useAudioCall, useChatWebSocket
-    │   ├── pages/              # LoginPage, RegisterPage, ChatPage, CallsPage
-    │   ├── services/           # apiClient, authService, chatService, callService, signalingService, webrtcManager
+    │   ├── pages/              # LoginPage, RegisterPage, ChatPage, CallsPage, WhiteboardPage, AiAssistantPage
+    │   ├── services/           # apiClient, authService, chatService, callService, aiServiceice, signalingService, webrtcManager
     │   └── types/              # Type definitions (auth, chat, calling)
     ├── package.json
     └── vite.config.ts
