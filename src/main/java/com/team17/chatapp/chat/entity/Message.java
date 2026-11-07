@@ -39,5 +39,10 @@ public class Message extends BaseEntity {
 
     @Column(name = "file_url", length = 500)
     private String fileUrl;
-}
 
+    @Column(name = "file_name", length = 255)
+    private String fileName;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+}

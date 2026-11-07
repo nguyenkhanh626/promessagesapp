@@ -4,12 +4,15 @@ import com.team17.chatapp.auth.entity.Role;
 import com.team17.chatapp.auth.entity.User;
 import com.team17.chatapp.auth.entity.UserStatus;
 import com.team17.chatapp.auth.repository.UserRepository;
+import com.team17.chatapp.chat.dto.AddGroupMembersRequest;
 import com.team17.chatapp.chat.dto.ConversationDto;
+import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.entity.Conversation;
 import com.team17.chatapp.chat.entity.ConversationMember;
 import com.team17.chatapp.chat.entity.ConversationType;
+import com.team17.chatapp.chat.entity.MemberRole;
 import com.team17.chatapp.chat.entity.MessageType;
 import com.team17.chatapp.chat.repository.ConversationMemberRepository;
 import com.team17.chatapp.chat.repository.ConversationRepository;
@@ -34,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,14 +60,18 @@ class ChatServiceTest {
 
     private UUID user1Id;
     private UUID user2Id;
+    private UUID user3Id;
     private User user1;
     private User user2;
+    private User user3;
     private Conversation sampleConversation;
+    private Conversation sampleGroupConversation;
 
     @BeforeEach
     void setUp() {
         user1Id = UUID.randomUUID();
         user2Id = UUID.randomUUID();
+        user3Id = UUID.randomUUID();
 
         user1 = User.builder()
                 .email("user1@example.com")
@@ -83,12 +89,28 @@ class ChatServiceTest {
                 .build();
         user2.setId(user2Id);
 
+        user3 = User.builder()
+                .email("user3@example.com")
+                .displayName("Le Van C")
+                .status(UserStatus.OFFLINE)
+                .role(Role.ROLE_USER)
+                .build();
+        user3.setId(user3Id);
+
         sampleConversation = Conversation.builder()
                 .type(ConversationType.DIRECT)
                 .lastMessageContent("Hello world")
                 .lastMessageAt(LocalDateTime.now())
                 .build();
         sampleConversation.setId(UUID.randomUUID());
+
+        sampleGroupConversation = Conversation.builder()
+                .name("Team Sprint 3")
+                .type(ConversationType.GROUP)
+                .lastMessageContent("Nguyen Van A đã tạo nhóm \"Team Sprint 3\"")
+                .lastMessageAt(LocalDateTime.now())
+                .build();
+        sampleGroupConversation.setId(UUID.randomUUID());
     }
 
     @Test
@@ -150,6 +172,7 @@ class ChatServiceTest {
         ConversationMember member2 = ConversationMember.builder()
                 .conversationId(sampleConversation.getId())
                 .userId(user2Id)
+                .role(MemberRole.MEMBER)
                 .build();
 
         when(conversationMemberRepository.findByConversationId(sampleConversation.getId()))
@@ -162,5 +185,123 @@ class ChatServiceTest {
         assertEquals(1, conversations.size());
         assertEquals("Tran Thi B", conversations.get(0).getName());
     }
-}
 
+    @Test
+    @DisplayName("Tuần 3: Tạo nhóm chat mới thành công với Admin và các thành viên")
+    void testCreateGroupConversation_Success() {
+        CreateGroupConversationRequest request = CreateGroupConversationRequest.builder()
+                .name("Team Sprint 3")
+                .memberIds(List.of(user2Id, user3Id))
+                .build();
+
+        when(userRepository.findById(user1Id)).thenReturn(Optional.of(user1));
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(sampleGroupConversation);
+        when(userRepository.existsById(user2Id)).thenReturn(true);
+        when(userRepository.existsById(user3Id)).thenReturn(true);
+        when(conversationMemberRepository.save(any(ConversationMember.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user1, user2, user3));
+
+        ConversationDto result = chatService.createGroupConversation(user1Id, request);
+
+        assertNotNull(result);
+        assertEquals(ConversationType.GROUP, result.getType());
+        assertEquals("Team Sprint 3", result.getName());
+        assertEquals(3, result.getMemberCount());
+        assertEquals(MemberRole.ADMIN, result.getCurrentUserRole());
+        verify(messageRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("Tuần 3: Thêm thành viên mới vào nhóm trò chuyện thành công")
+    void testAddMembersToGroup_Success() {
+        UUID groupId = sampleGroupConversation.getId();
+        AddGroupMembersRequest request = AddGroupMembersRequest.builder()
+                .userIds(List.of(user3Id))
+                .build();
+
+        ConversationMember adminMember = ConversationMember.builder()
+                .conversationId(groupId)
+                .userId(user1Id)
+                .role(MemberRole.ADMIN)
+                .build();
+
+        ConversationMember newMember = ConversationMember.builder()
+                .conversationId(groupId)
+                .userId(user3Id)
+                .role(MemberRole.MEMBER)
+                .build();
+
+        when(conversationRepository.findById(groupId)).thenReturn(Optional.of(sampleGroupConversation));
+        when(conversationMemberRepository.findByConversationIdAndUserId(groupId, user1Id))
+                .thenReturn(Optional.of(adminMember));
+        when(userRepository.findById(user1Id)).thenReturn(Optional.of(user1));
+        when(conversationMemberRepository.existsByConversationIdAndUserId(groupId, user3Id)).thenReturn(false);
+        when(userRepository.findById(user3Id)).thenReturn(Optional.of(user3));
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(sampleGroupConversation);
+        when(conversationMemberRepository.findByConversationId(groupId))
+                .thenReturn(List.of(adminMember, newMember));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user1, user3));
+
+        ConversationDto updated = chatService.addMembersToGroup(groupId, user1Id, request);
+
+        assertNotNull(updated);
+        assertEquals(2, updated.getMemberCount());
+        verify(conversationMemberRepository).save(any(ConversationMember.class));
+    }
+
+    @Test
+    @DisplayName("Tuần 3: Chặn thành viên thường xóa người khác khỏi nhóm")
+    void testRemoveMemberFromGroup_NonAdmin_ThrowsForbidden() {
+        UUID groupId = sampleGroupConversation.getId();
+
+        ConversationMember normalMember = ConversationMember.builder()
+                .conversationId(groupId)
+                .userId(user2Id)
+                .role(MemberRole.MEMBER)
+                .build();
+
+        ConversationMember targetMember = ConversationMember.builder()
+                .conversationId(groupId)
+                .userId(user3Id)
+                .role(MemberRole.MEMBER)
+                .build();
+
+        when(conversationRepository.findById(groupId)).thenReturn(Optional.of(sampleGroupConversation));
+        when(conversationMemberRepository.findByConversationIdAndUserId(groupId, user2Id))
+                .thenReturn(Optional.of(normalMember));
+        when(conversationMemberRepository.findByConversationIdAndUserId(groupId, user3Id))
+                .thenReturn(Optional.of(targetMember));
+
+        AppException ex = assertThrows(AppException.class, () ->
+                chatService.removeMemberFromGroup(groupId, user2Id, user3Id)
+        );
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
+    @DisplayName("Tuần 3: Lưu tin nhắn đính kèm hình ảnh / tệp thành công")
+    void testSaveMessage_WithImageAttachment_Success() {
+        UUID conversationId = sampleGroupConversation.getId();
+        SendMessageRequest request = SendMessageRequest.builder()
+                .content("")
+                .messageType(MessageType.IMAGE)
+                .fileUrl("http://localhost:8080/api/files/sample.png")
+                .fileName("sample.png")
+                .fileSize(12345L)
+                .build();
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(sampleGroupConversation));
+        when(messageRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.findById(user1Id)).thenReturn(Optional.of(user1));
+
+        MessageDto result = chatService.saveMessage(conversationId, user1Id, request);
+
+        assertNotNull(result);
+        assertEquals(MessageType.IMAGE, result.getMessageType());
+        assertEquals("http://localhost:8080/api/files/sample.png", result.getFileUrl());
+        assertEquals("sample.png", result.getFileName());
+        assertEquals(12345L, result.getFileSize());
+    }
+}

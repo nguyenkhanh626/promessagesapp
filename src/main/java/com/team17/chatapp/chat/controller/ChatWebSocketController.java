@@ -46,6 +46,8 @@ public class ChatWebSocketController {
                 .content(payload.getContent())
                 .messageType(payload.getMessageType())
                 .fileUrl(payload.getFileUrl())
+                .fileName(payload.getFileName())
+                .fileSize(payload.getFileSize())
                 .build();
 
         MessageDto messageDto = chatService.saveMessage(payload.getConversationId(), sender.getId(), request);
@@ -56,4 +58,3 @@ public class ChatWebSocketController {
         log.info("Broadcast tin nhắn mới tới topic {}: {}", destination, messageDto.getContent());
     }
 }
-

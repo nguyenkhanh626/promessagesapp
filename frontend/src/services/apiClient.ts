@@ -21,7 +21,9 @@ class ApiClient {
 
     const token = localStorage.getItem('token')
     const headers = new Headers(options.headers || {})
-    headers.set('Content-Type', 'application/json')
+    if (!(options.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json')
+    }
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
     }
@@ -55,10 +57,11 @@ class ApiClient {
   }
 
   post<T>(endpoint: string, body?: any, options?: RequestOptions) {
+    const isFormData = body instanceof FormData
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
     })
   }
 
@@ -76,4 +79,3 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)
-

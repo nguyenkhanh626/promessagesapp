@@ -9,7 +9,20 @@ export interface Message {
   content: string
   messageType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM'
   fileUrl?: string
+  fileName?: string
+  fileSize?: number
   createdAt: string
+}
+
+export interface ConversationMember {
+  id: string
+  userId: string
+  displayName: string
+  email: string
+  avatarUrl?: string
+  status?: 'ONLINE' | 'OFFLINE' | 'BUSY' | 'AWAY'
+  role: 'ADMIN' | 'MEMBER'
+  joinedAt: string
 }
 
 export interface Conversation {
@@ -21,11 +34,29 @@ export interface Conversation {
   lastMessageAt?: string
   otherUser?: User
   memberCount: number
+  currentUserRole?: 'ADMIN' | 'MEMBER'
+  members?: ConversationMember[]
 }
 
 export interface SendMessagePayload {
   content: string
-  messageType?: 'TEXT' | 'IMAGE' | 'FILE'
+  messageType?: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM'
   fileUrl?: string
+  fileName?: string
+  fileSize?: number
 }
 
+export interface CreateGroupPayload {
+  name: string
+  avatarUrl?: string
+  memberIds: string[]
+}
+
+export interface FileUploadResponse {
+  fileName: string
+  originalFileName: string
+  fileUrl: string
+  contentType: string
+  fileSize: number
+  messageType: 'IMAGE' | 'FILE'
+}

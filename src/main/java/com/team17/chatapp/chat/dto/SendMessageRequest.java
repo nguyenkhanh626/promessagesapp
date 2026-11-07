@@ -1,7 +1,6 @@
 package com.team17.chatapp.chat.dto;
 
 import com.team17.chatapp.chat.entity.MessageType;
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,7 +12,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SendMessageRequest {
 
-    @NotBlank(message = "Nội dung tin nhắn không được để trống")
     private String content;
 
     @Builder.Default
@@ -21,8 +19,11 @@ public class SendMessageRequest {
 
     private String fileUrl;
 
+    private String fileName;
+
+    private Long fileSize;
+
     public MessageType getMessageType() {
         return messageType != null ? messageType : MessageType.TEXT;
     }
 }
-

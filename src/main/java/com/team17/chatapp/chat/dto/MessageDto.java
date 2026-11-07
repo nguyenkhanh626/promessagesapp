@@ -24,6 +24,8 @@ public class MessageDto {
     private String content;
     private MessageType messageType;
     private String fileUrl;
+    private String fileName;
+    private Long fileSize;
     private LocalDateTime createdAt;
 
     public static MessageDto from(Message message, String senderName, String senderAvatarUrl) {
@@ -36,8 +38,9 @@ public class MessageDto {
                 .content(message.getContent())
                 .messageType(message.getMessageType())
                 .fileUrl(message.getFileUrl())
+                .fileName(message.getFileName())
+                .fileSize(message.getFileSize())
                 .createdAt(message.getCreatedAt())
                 .build();
     }
 }
-

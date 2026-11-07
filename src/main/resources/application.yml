@@ -5,6 +5,12 @@ spring:
   application:
     name: chatapp
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 25MB
+      max-request-size: 25MB
+
   datasource:
     url: jdbc:postgresql://localhost:5432/chatapp_db
     username: postgres
@@ -32,6 +38,8 @@ app:
     allowed-origins:
       - "http://localhost:5173"
       - "http://localhost:3000"
+  upload:
+    dir: uploads
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
