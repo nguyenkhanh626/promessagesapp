@@ -1,6 +1,7 @@
 package com.team17.chatapp.config;
 
 import com.team17.chatapp.websocket.interceptor.AuthChannelInterceptor;
+import com.team17.chatapp.whiteboard.websocket.WhiteboardSubscriptionInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
@@ -15,6 +16,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final AuthChannelInterceptor authChannelInterceptor;
+    private final WhiteboardSubscriptionInterceptor whiteboardSubscriptionInterceptor;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -43,7 +45,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // Gắn Interceptor để chặn và xác thực Token JWT trong frame CONNECT
-        registration.interceptors(authChannelInterceptor);
+        registration.interceptors(authChannelInterceptor, whiteboardSubscriptionInterceptor);
     }
 }
-

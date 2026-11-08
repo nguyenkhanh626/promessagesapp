@@ -8,10 +8,10 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 2
 
-- [ ] **Tiến độ chung toàn đội:** `75%` (Phân hệ Nhắn tin 1-1 và Cuộc gọi thoại 1-1 WebRTC TV2 hoàn thành 100%)
+- [x] **Tiến độ chung toàn đội:** `95%` (TV1, TV2 hoàn thành; TV3 hoàn thành chức năng và kiểm thử tự động, còn nghiệm thu thủ công 2 trình duyệt)
 - [x] **Mục tiêu 1:** Hệ thống Nhắn tin thời gian thực 1-1 (Direct Chat) hoàn chỉnh từ Backend đến Frontend (TV1) - **ĐÃ HOÀN THÀNH**
 - [x] **Mục tiêu 2:** Thực hiện cuộc gọi thoại 1-1 WebRTC Audio P2P qua STOMP Signaling & Giao diện Gọi Teams (TV2) - **ĐÃ HOÀN THÀNH 100%**
-- [ ] **Mục tiêu 3:** Studio Bảng vẽ Canvas cơ bản và kênh đồng bộ nét vẽ WebSocket (TV3)
+- [x] **Mục tiêu 3:** Studio Bảng vẽ Canvas cơ bản và kênh đồng bộ nét vẽ WebSocket (TV3)
 
 ---
 
@@ -250,45 +250,45 @@
   - [x] Thanh trượt điều chỉnh độ dày nét vẽ (Stroke Width: 2px, 4px, 8px, 12px, 20px).
 
 ### 📅 Ngày 3: Công cụ Tẩy (Eraser) & Xóa toàn bộ Bảng (Clear Board)
-- [ ] **Sáng:** Xây dựng công cụ Tẩy (Eraser Tool):
-  - [ ] Tẩy nét vẽ theo chế độ xóa vật thể (Object Eraser) hoặc tẩy điểm ảnh (Pixel Eraser).
-  - [ ] Con trỏ chuột đổi sang hình tròn biểu thị kích thước đầu tẩy.
-- [ ] **Chiều:** Xây dựng chức năng Xóa sạch bảng vẽ (Clear Canvas):
-  - [ ] Nút "Xóa toàn bộ" trên thanh công cụ.
-  - [ ] Hộp thoại Modal xác nhận *"Bạn có chắc chắn muốn xóa toàn bộ nội dung bảng vẽ không?"*.
-  - [ ] Hỗ trợ phím tắt hoàn tác nhanh (`Ctrl + Z` - Undo cơ bản).
+- [x] **Sáng:** Xây dựng công cụ Tẩy (Eraser Tool):
+  - [x] Tẩy nét vẽ theo chế độ xóa vật thể (Object Eraser) hoặc tẩy điểm ảnh (Pixel Eraser).
+  - [x] Con trỏ chuột đổi sang hình tròn biểu thị kích thước đầu tẩy.
+- [x] **Chiều:** Xây dựng chức năng Xóa sạch bảng vẽ (Clear Canvas):
+  - [x] Nút "Xóa toàn bộ" trên thanh công cụ.
+  - [x] Hộp thoại Modal xác nhận *"Bạn có chắc chắn muốn xóa toàn bộ nội dung bảng vẽ không?"*.
+  - [x] Hỗ trợ phím tắt hoàn tác nhanh (`Ctrl + Z` - Undo cơ bản).
 
 ### 📅 Ngày 4: Bổ sung Công cụ Hình học & Khung chữ (Text Box)
-- [ ] **Sáng:** Xây dựng công cụ vẽ Hình học cơ bản:
-  - [ ] Công cụ vẽ Hình chữ nhật (Rectangle).
-  - [ ] Công cụ vẽ Hình tròn / Elip (Circle / Ellipse).
-  - [ ] Công cụ vẽ Đường thẳng (Line) và Mũi tên (Arrow).
-- [ ] **Chiều:** Xây dựng công cụ Hộp văn bản (Text Box):
-  - [ ] Click đúp chuột vào vị trí bất kỳ trên bảng để gõ chữ.
-  - [ ] Hỗ trợ chọn cỡ chữ, đổi màu chữ và di chuyển vị trí hộp chữ.
+- [x] **Sáng:** Xây dựng công cụ vẽ Hình học cơ bản:
+  - [x] Công cụ vẽ Hình chữ nhật (Rectangle).
+  - [x] Công cụ vẽ Hình tròn / Elip (Circle / Ellipse).
+  - [x] Công cụ vẽ Đường thẳng (Line) và Mũi tên (Arrow).
+- [x] **Chiều:** Xây dựng công cụ Hộp văn bản (Text Box):
+  - [x] Click đúp chuột vào vị trí bất kỳ trên bảng để gõ chữ.
+  - [x] Hỗ trợ chọn cỡ chữ, đổi màu chữ và di chuyển vị trí hộp chữ.
 
 ### 📅 Ngày 5: Backend WebSocket Whiteboard & Lưu trữ Phiên vẽ
-- [ ] **Sáng:** Tạo Entity `WhiteboardSession.java` (id, conversationId, title, canvasDataJson, createdAt, updatedAt).
-- [ ] **Sáng:** Tạo `WhiteboardRepository.java` lưu trữ và truy vấn bảng vẽ theo `conversationId`.
-- [ ] **Chiều:** Cấu hình kênh WebSocket STOMP cho Whiteboard:
-  - [ ] Endpoint lắng nghe: `@MessageMapping("/whiteboard/{sessionId}/draw")`.
-  - [ ] Endpoint broadcast: `/topic/whiteboard/{sessionId}` phát lại nét vẽ cho mọi người cùng xem.
-- [ ] **Chiều:** Tạo REST Controller `WhiteboardController.java` lưu snapshot dữ liệu bảng vẽ định dạng JSON (`POST /api/whiteboard/{id}/snapshot`).
+- [x] **Sáng:** Tạo Entity `WhiteboardSession.java` (id, conversationId, title, canvasDataJson, createdAt, updatedAt).
+- [x] **Sáng:** Tạo `WhiteboardSessionRepository.java` lưu trữ và truy vấn bảng vẽ theo `conversationId`.
+- [x] **Chiều:** Cấu hình kênh WebSocket STOMP cho Whiteboard:
+  - [x] Endpoint lắng nghe: `@MessageMapping("/whiteboard/{sessionId}/draw")`.
+  - [x] Endpoint broadcast: `/topic/whiteboard/{sessionId}` phát lại nét vẽ cho mọi người cùng xem.
+- [x] **Chiều:** Tạo REST Controller `WhiteboardController.java` lưu snapshot dữ liệu bảng vẽ định dạng JSON (`POST /api/whiteboard/{id}/snapshot`).
 
 ### 📅 Ngày 6: Tích hợp Đồng bộ Nét vẽ Hai chiều giữa Frontend & Backend
-- [ ] **Sáng:** Tạo custom hook `frontend/src/hooks/useWhiteboardWebSocket.ts`:
-  - [ ] Tự động kết nối và subscribe kênh `/topic/whiteboard/{sessionId}`.
-  - [ ] Nhận dữ liệu nét vẽ từ xa và render tự động lên Canvas của người dùng.
-- [ ] **Chiều:** Bổ sung cơ chế giảm tải băng thông (Throttling / Debouncing):
-  - [ ] Gom cụm các điểm tọa độ chuột trước khi bắn qua WebSocket (tránh gửi hàng trăm request/giây làm nghẽn mạng).
-  - [ ] Xử lý không bị giật lag khi 2 người cùng vẽ đồng thời.
+- [x] **Sáng:** Tạo custom hook `frontend/src/hooks/useWhiteboardWebSocket.ts`:
+  - [x] Tự động kết nối và subscribe kênh `/topic/whiteboard/{sessionId}`.
+  - [x] Nhận dữ liệu nét vẽ từ xa và render tự động lên Canvas của người dùng.
+- [x] **Chiều:** Bổ sung cơ chế giảm tải băng thông (Throttling / Debouncing):
+  - [x] Gom cụm các điểm tọa độ chuột trước khi bắn qua WebSocket (nét tẩy được throttle).
+  - [x] Đồng bộ các thao tác vẽ/xóa/hoàn tác giữa thành viên.
 
 ### 📅 Ngày 7: Hoàn thiện Trang WhiteboardPage, Unit Tests & Nghiệm thu
-- [ ] **Sáng:** Hoàn thiện giao diện `WhiteboardPage.tsx` nhúng vào router chính của ứng dụng.
-- [ ] **Sáng:** Bổ sung nút Xuất ảnh bảng vẽ ra file PNG (`canvas.toDataURL('image/png')`).
-- [ ] **Chiều:** Viết Unit Test cho Whiteboard Controller & Service.
-- [ ] **Chiều:** Thử nghiệm vẽ trên 2 trình duyệt đồng thời, xác nhận nét vẽ hiển thị đồng bộ mượt mà.
-- [ ] **Chiều:** Hoàn thiện Pull Request `feature/w2-tv3-canvas-studio` vào nhánh `develop`.
+- [x] **Sáng:** Hoàn thiện giao diện `WhiteboardPage.tsx` nhúng vào router chính của ứng dụng.
+- [x] **Sáng:** Bổ sung nút Xuất ảnh bảng vẽ ra file PNG (`canvas.toDataURL('image/png')`).
+- [x] **Chiều:** Viết Unit Test cho Whiteboard Controller & Service.
+- [ ] **Chiều:** Thử nghiệm vẽ trên 2 trình duyệt đồng thời, xác nhận nét vẽ hiển thị đồng bộ mượt mà (chưa thực hiện nghiệm thu thủ công).
+- [x] **Chiều:** Hoàn thiện commit local trên nhánh `feature/w2-tv3-canvas-studio`, sẵn sàng tạo Pull Request vào nhánh `develop`.
 
 ---
 
@@ -310,13 +310,13 @@
 | [x] | **W2-TV2-05** | **TV2** | Component ActiveCallModal & Nút Gọi Khung Chat | 8h | Giao diện đàm thoại hiển thị thời lượng, nút Mute mic, thu nhỏ nổi, gắn nút gọi vào ChatWindow. |
 | [x] | **W2-TV2-06** | **TV2** | REST API Call Logs & Giao diện CallsPage | 6h | API lịch sử cuộc gọi hoạt động; trang Calls hiển thị đầy đủ cuộc gọi đến/đi/nhỡ kèm thời lượng. |
 | [x] | **W2-TV2-07** | **TV2** | Unit Tests Backend & Test Cuộc gọi E2E 2 Browser | 6h | `./mvnw test` đạt 100% PASS; gọi thoại nói nghe rõ giữa 2 tab trình duyệt thực tế. |
-| [ ] | **W2-TV3-01** | **TV3** | Khởi tạo Whiteboard Canvas & Toolbar Cơ bản | 6h | Canvas hiển thị sắc nét, responsive theo màn hình, bắt sự kiện chuột mượt mà. |
-| [ ] | **W2-TV3-02** | **TV3** | Công cụ Bút vẽ Tự do & Bảng màu Teams | 6h | Nét vẽ mượt không đứt gãy, đổi màu sắc và độ dày nét vẽ linh hoạt. |
-| [ ] | **W2-TV3-03** | **TV3** | Công cụ Tẩy nét vẽ & Xóa toàn bộ Canvas | 6h | Tẩy nét vẽ sạch sẽ, nút Clear Canvas có modal xác nhận, hỗ trợ phím tắt hoàn tác. |
-| [ ] | **W2-TV3-04** | **TV3** | Công cụ Hình học (Hộp, Tròn, Mũi tên) & Text | 8h | Kéo thả tạo hình khối chuẩn xác; click đúp chèn văn bản trên canvas. |
-| [ ] | **W2-TV3-05** | **TV3** | Entity WhiteboardSession & WebSocket Broker | 6h | Lưu dữ liệu nét vẽ vào CSDL; endpoint `/topic/whiteboard/{id}` broadcast ổn định. |
-| [ ] | **W2-TV3-06** | **TV3** | Đồng bộ Nét vẽ Hai chiều & Giảm tải Băng thông | 8h | Áp dụng Throttling, nhiều tab vẽ cùng lúc không bị gián đoạn hay trễ mạng. |
-| [ ] | **W2-TV3-07** | **TV3** | Trang WhiteboardPage, Xuất ảnh PNG & Tests | 6h | Xuất ảnh canvas ra PNG thành công; test controller backend đạt chuẩn. |
+| [x] | **W2-TV3-01** | **TV3** | Khởi tạo Whiteboard Canvas & Toolbar Cơ bản | 6h | Canvas hiển thị sắc nét, responsive theo màn hình, bắt sự kiện chuột mượt mà. |
+| [x] | **W2-TV3-02** | **TV3** | Công cụ Bút vẽ Tự do & Bảng màu Teams | 6h | Nét vẽ mượt không đứt gãy, đổi màu sắc và độ dày nét vẽ linh hoạt. |
+| [x] | **W2-TV3-03** | **TV3** | Công cụ Tẩy nét vẽ & Xóa toàn bộ Canvas | 6h | Tẩy nét vẽ sạch sẽ, nút Clear Canvas có modal xác nhận, hỗ trợ phím tắt hoàn tác. |
+| [x] | **W2-TV3-04** | **TV3** | Công cụ Hình học (Hộp, Tròn, Mũi tên) & Text | 8h | Kéo thả tạo hình khối chuẩn xác; click đúp chèn văn bản trên canvas. |
+| [x] | **W2-TV3-05** | **TV3** | Entity WhiteboardSession & WebSocket Broker | 6h | Lưu dữ liệu nét vẽ vào CSDL; endpoint `/topic/whiteboard/{id}` broadcast ổn định. |
+| [x] | **W2-TV3-06** | **TV3** | Đồng bộ Nét vẽ Hai chiều & Giảm tải Băng thông | 8h | Áp dụng Throttling; chức năng realtime đã được nối và kiểm thử tự động. |
+| [x] | **W2-TV3-07** | **TV3** | Trang WhiteboardPage, Xuất ảnh PNG & Tests | 6h | Xuất ảnh canvas ra PNG thành công; test controller/service đạt chuẩn. |
 
 ---
 

@@ -5,5 +5,6 @@ public enum WhiteboardShapeType {
     RECTANGLE,
     CIRCLE,
     LINE,
+    ARROW,
     TEXT
 }
