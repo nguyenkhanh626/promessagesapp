@@ -1,25 +1,26 @@
 import { useState } from 'react'
 import {
-  Circle,
-  Download,
-  MousePointer2,
+  Check,
   Pencil,
-  Redo2,
-  Square,
-  Type,
-  Undo2,
+  SlidersHorizontal,
 } from 'lucide-react'
+import { WhiteboardCanvas } from '../components/whiteboard/WhiteboardCanvas'
 
-const tools = [
-  { label: 'Chọn', icon: MousePointer2 },
-  { label: 'Nét vẽ', icon: Pencil },
-  { label: 'Hình chữ nhật', icon: Square },
-  { label: 'Hình tròn', icon: Circle },
-  { label: 'Văn bản', icon: Type },
+const colors = [
+  { label: 'Đen', value: '#242424' },
+  { label: 'Trắng', value: '#ffffff' },
+  { label: 'Tím Teams', value: '#5B5FC7' },
+  { label: 'Đỏ', value: '#C4314B' },
+  { label: 'Xanh lá', value: '#107C41' },
+  { label: 'Xanh dương', value: '#0078D4' },
+  { label: 'Vàng', value: '#FFB900' },
 ] as const
 
+const strokeWidths = [2, 4, 8, 12, 20] as const
+
 export function WhiteboardPage() {
-  const [activeTool, setActiveTool] = useState<(typeof tools)[number]['label']>('Nét vẽ')
+  const [selectedColor, setSelectedColor] = useState<string>(colors[0].value)
+  const [widthIndex, setWidthIndex] = useState(1)
 
   return (
     <section className="flex h-full min-h-[560px] flex-col overflow-hidden rounded-xl border border-[#e1dfdd] bg-white text-[#242424] shadow-sm">
@@ -30,61 +31,79 @@ export function WhiteboardPage() {
         </div>
         <div className="flex items-center gap-2 text-sm text-[#616161]">
           <span className="h-2 w-2 rounded-full bg-[#13a10e]" />
-          Bảng vẽ sẵn sàng
+          Studio Canvas
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e1dfdd] bg-[#faf9f8] px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1" aria-label="Công cụ bảng vẽ">
-          {tools.map(({ label, icon: Icon }) => (
-            <button
-              key={label}
-              type="button"
-              aria-label={label}
-              aria-pressed={activeTool === label}
-              onClick={() => setActiveTool(label)}
-              className={`grid h-9 w-9 place-items-center rounded-md transition-colors ${
-                activeTool === label
-                  ? 'bg-[#5b5fc7] text-white'
-                  : 'text-[#424242] hover:bg-[#edebe9]'
-              }`}
-              title={label}
-            >
-              <Icon size={18} aria-hidden="true" />
-            </button>
-          ))}
-          <span className="mx-1 h-6 w-px bg-[#d1d1d1]" />
-          <button type="button" aria-label="Hoàn tác" disabled className="grid h-9 w-9 place-items-center rounded-md text-[#a19f9d]">
-            <Undo2 size={18} aria-hidden="true" />
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-[#e1dfdd] bg-[#faf9f8] px-4 py-3">
+        <div className="flex items-center gap-2" aria-label="Công cụ bảng vẽ">
+          <button
+            type="button"
+            aria-label="Bút vẽ tự do"
+            aria-pressed="true"
+            className="grid h-9 w-9 place-items-center rounded-md bg-[#5b5fc7] text-white"
+            title="Bút vẽ tự do"
+          >
+            <Pencil size={18} aria-hidden="true" />
           </button>
-          <button type="button" aria-label="Làm lại" disabled className="grid h-9 w-9 place-items-center rounded-md text-[#a19f9d]">
-            <Redo2 size={18} aria-hidden="true" />
-          </button>
+          <span className="text-sm font-medium">Bút vẽ</span>
         </div>
-        <button
-          type="button"
-          disabled
-          className="inline-flex h-9 items-center gap-2 rounded-md border border-[#d1d1d1] px-3 text-sm text-[#616161]"
-          title="Xuất bảng vẽ sẽ có trong phiên bản tiếp theo"
-        >
-          <Download size={16} aria-hidden="true" />
-          Xuất
-        </button>
+
+        <span className="hidden h-7 w-px bg-[#d1d1d1] sm:block" />
+
+        <fieldset className="flex items-center gap-2">
+          <legend className="sr-only">Màu nét vẽ</legend>
+          <span className="text-sm text-[#616161]">Màu</span>
+          <div className="flex items-center gap-1.5">
+            {colors.map(({ label, value }) => (
+              <button
+                key={value}
+                type="button"
+                aria-label={label}
+                aria-pressed={selectedColor === value}
+                onClick={() => setSelectedColor(value)}
+                className={`grid h-7 w-7 place-items-center rounded-full border transition ${
+                  selectedColor === value
+                    ? 'border-[#5b5fc7] ring-2 ring-[#5b5fc7] ring-offset-1'
+                    : 'border-[#c8c6c4] hover:scale-110'
+                }`}
+                style={{ backgroundColor: value }}
+                title={label}
+              >
+                {selectedColor === value && (
+                  <Check
+                    size={14}
+                    className={value === '#ffffff' || value === '#FFB900' ? 'text-[#242424]' : 'text-white'}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <span className="hidden h-7 w-px bg-[#d1d1d1] sm:block" />
+
+        <label className="flex min-w-[190px] flex-1 items-center gap-3 sm:flex-none">
+          <SlidersHorizontal size={16} className="shrink-0 text-[#616161]" aria-hidden="true" />
+          <span className="whitespace-nowrap text-sm text-[#616161]">Độ dày</span>
+          <input
+            type="range"
+            min={0}
+            max={strokeWidths.length - 1}
+            step={1}
+            value={widthIndex}
+            onChange={(event) => setWidthIndex(Number(event.target.value))}
+            aria-label="Độ dày nét vẽ"
+            aria-valuetext={`${strokeWidths[widthIndex]} pixel`}
+            className="min-w-16 flex-1 accent-[#5b5fc7]"
+          />
+          <span className="w-10 text-right text-sm tabular-nums">{strokeWidths[widthIndex]} px</span>
+        </label>
       </div>
 
-      <div className="relative m-4 flex min-h-[360px] flex-1 items-center justify-center overflow-hidden rounded-lg border border-[#edebe9] bg-[radial-gradient(#d1d1d1_1px,transparent_1px)] [background-size:20px_20px]">
-        <div className="rounded-xl border border-[#edebe9] bg-white/95 px-6 py-5 text-center shadow-sm">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-[#eeefff] text-[#5b5fc7]">
-            <Pencil size={22} aria-hidden="true" />
-          </div>
-          <h2 className="mt-3 font-semibold">Bắt đầu cộng tác trên bảng vẽ</h2>
-          <p className="mt-1 max-w-sm text-sm text-[#616161]">
-            Chọn công cụ <strong>{activeTool.toLowerCase()}</strong>. Bảng vẽ vector và đồng bộ thời gian thực sẽ được hoàn thiện ở tuần 2.
-          </p>
-        </div>
-        <span className="absolute bottom-3 right-4 rounded-full border border-[#e1dfdd] bg-white px-3 py-1 text-xs text-[#616161]">
-          100%
-        </span>
+      <div className="relative m-4 min-h-[360px] flex-1 overflow-hidden rounded-lg border border-[#edebe9] bg-[radial-gradient(#d1d1d1_1px,transparent_1px)] [background-size:20px_20px]">
+        <WhiteboardCanvas color={selectedColor} strokeWidth={strokeWidths[widthIndex]} />
       </div>
     </section>
   )

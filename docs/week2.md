@@ -236,18 +236,18 @@
 > **Trọng tâm:** Tích hợp bộ công cụ vẽ Canvas Studio cơ bản (HTML5 Canvas / Fabric.js), xây dựng thanh công cụ vẽ, Entity WhiteboardSession và kênh đồng bộ nét vẽ WebSocket cơ bản.
 
 ### 📅 Ngày 1: Nghiên cứu Canvas Engine & Khởi tạo Studio
-- [ ] **Sáng:** Lựa chọn và cài đặt thư viện Canvas: `fabric` hoặc HTML5 Canvas API thuần trên React.
-- [ ] **Sáng:** Thiết kế Component khung vẽ `WhiteboardCanvas.tsx`: Tự động co giãn theo kích thước vùng làm việc màn hình (Auto-resize Responsive).
-- [ ] **Chiều:** Cài đặt cơ chế bắt sự kiện chuột trên Canvas: `onMouseDown`, `onMouseMove`, `onMouseUp` để ghi nhận tọa độ điểm vẽ.
-- [ ] **Chiều:** Thiết kế thanh công cụ vẽ (Drawing Toolbar) cố định ở cạnh trên hoặc cạnh trái khung vẽ.
+- [x] **Sáng:** Lựa chọn và cài đặt thư viện Canvas: `fabric` hoặc HTML5 Canvas API thuần trên React.
+- [x] **Sáng:** Thiết kế Component khung vẽ `WhiteboardCanvas.tsx`: Tự động co giãn theo kích thước vùng làm việc màn hình (Auto-resize Responsive).
+- [x] **Chiều:** Cài đặt cơ chế bắt sự kiện chuột trên Canvas: `onMouseDown`, `onMouseMove`, `onMouseUp` để ghi nhận tọa độ điểm vẽ.
+- [x] **Chiều:** Thiết kế thanh công cụ vẽ (Drawing Toolbar) cố định ở cạnh trên hoặc cạnh trái khung vẽ.
 
 ### 📅 Ngày 2: Công cụ Bút vẽ Tự do (Pencil / Freehand) & Bảng Màu
-- [ ] **Sáng:** Xây dựng công cụ Bút vẽ tự do (Pencil tool):
-  - [ ] Vẽ đường cong mượt mà theo tọa độ di chuột của người dùng.
-  - [ ] Quản lý độ mượt nét vẽ (Path Smoothing / Quadratic curve).
-- [ ] **Chiều:** Xây dựng Bảng chọn màu sắc (Color Palette) chuẩn phong cách Microsoft:
-  - [ ] Bảng màu nhanh: Đen, Trắng, Tím Teams (`#5B5FC7`), Đỏ (`#C4314B`), Xanh lá (`#107C41`), Xanh dương (`#0078D4`), Vàng (`#FFB900`).
-  - [ ] Thanh trượt điều chỉnh độ dày nét vẽ (Stroke Width: 2px, 4px, 8px, 12px, 20px).
+- [x] **Sáng:** Xây dựng công cụ Bút vẽ tự do (Pencil tool):
+  - [x] Vẽ đường cong mượt mà theo tọa độ di chuột của người dùng.
+  - [x] Quản lý độ mượt nét vẽ (Path Smoothing / Quadratic curve).
+- [x] **Chiều:** Xây dựng Bảng chọn màu sắc (Color Palette) chuẩn phong cách Microsoft:
+  - [x] Bảng màu nhanh: Đen, Trắng, Tím Teams (`#5B5FC7`), Đỏ (`#C4314B`), Xanh lá (`#107C41`), Xanh dương (`#0078D4`), Vàng (`#FFB900`).
+  - [x] Thanh trượt điều chỉnh độ dày nét vẽ (Stroke Width: 2px, 4px, 8px, 12px, 20px).
 
 ### 📅 Ngày 3: Công cụ Tẩy (Eraser) & Xóa toàn bộ Bảng (Clear Board)
 - [ ] **Sáng:** Xây dựng công cụ Tẩy (Eraser Tool):
