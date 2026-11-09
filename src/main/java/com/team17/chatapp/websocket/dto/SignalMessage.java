@@ -1,5 +1,6 @@
 package com.team17.chatapp.websocket.dto;
 
+import com.team17.chatapp.calling.entity.CallType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,6 +31,10 @@ public class SignalMessage {
 
     /** Mã phòng họp (cho cuộc gọi nhóm đa người dùng) */
     private String roomId;
+
+    /** Loại cuộc gọi: AUDIO hoặc VIDEO (Tuần 3) */
+    @Builder.Default
+    private CallType callType = CallType.AUDIO;
 
     /** Dữ liệu SDP Offer/Answer hoặc ICE Candidate (chuỗi JSON hoặc Object) */
     private Object payload;
@@ -76,6 +81,14 @@ public class SignalMessage {
 
     public void setRoomId(String roomId) {
         this.roomId = roomId;
+    }
+
+    public CallType getCallType() {
+        return callType;
+    }
+
+    public void setCallType(CallType callType) {
+        this.callType = callType;
     }
 
     public Object getPayload() {

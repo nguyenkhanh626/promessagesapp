@@ -14,6 +14,9 @@ export type SignalType =
   | 'CALL_OFFER'
   | 'CALL_ANSWER'
   | 'ICE_CANDIDATE'
+  | 'CAMERA_TOGGLE'
+  | 'MIC_TOGGLE'
+  | 'DEVICE_CHANGE'
   | 'JOIN_ROOM'
   | 'LEAVE_ROOM'
   | 'USER_JOINED'
@@ -39,6 +42,7 @@ export interface SignalMessage {
   senderName?: string
   receiverId?: string
   roomId?: string
+  callType?: 'AUDIO' | 'VIDEO'
   payload?: any
   timestamp?: string
 }

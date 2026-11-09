@@ -8,19 +8,30 @@ import { useAuth } from './AuthContext'
 
 interface CallContextType {
   callStatus: CallStatus
+  callType: 'AUDIO' | 'VIDEO'
   currentRoomId: string | null
   caller: CallUserInfo | null
   targetUser: CallUserInfo | null
   duration: number
   isMuted: boolean
+  isVideoEnabled: boolean
+  isRemoteCameraOff: boolean
+  isRemoteMuted: boolean
+  hasCameraDevice: boolean
+  localVideoStream: MediaStream | null
+  remoteStream: MediaStream | null
+  iceConnectionState: RTCIceConnectionState
   isMinimized: boolean
   errorMessage: string | null
-  startCall: (target: CallUserInfo) => Promise<void>
+  startCall: (target: CallUserInfo, type?: 'AUDIO' | 'VIDEO') => Promise<void>
   acceptCall: () => Promise<void>
   rejectCall: () => void
   cancelCall: () => void
   endCall: () => void
   toggleMute: () => void
+  toggleVideo: () => void
+  switchCameraDevice: (deviceId: string) => Promise<MediaStreamTrack | null>
+  switchMicrophoneDevice: (deviceId: string) => Promise<MediaStreamTrack | null>
   toggleMinimize: () => void
   clearError: () => void
 }
@@ -30,22 +41,34 @@ const CallContext = createContext<CallContextType | null>(null)
 export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, token } = useAuth()
   const [callStatus, setCallStatus] = useState<CallStatus>('IDLE')
+  const [currentCallType, setCurrentCallType] = useState<'AUDIO' | 'VIDEO'>('AUDIO')
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null)
   const [caller, setCaller] = useState<CallUserInfo | null>(null)
   const [targetUser, setTargetUser] = useState<CallUserInfo | null>(null)
   const [duration, setDuration] = useState<number>(0)
   const [isMinimized, setIsMinimized] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isRemoteCameraOff, setIsRemoteCameraOff] = useState<boolean>(false)
+  const [isRemoteMuted, setIsRemoteMuted] = useState<boolean>(false)
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new')
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const durationTimerRef = useRef<any>(null)
   const timeoutTimerRef = useRef<any>(null)
 
   const {
+    localVideoStream,
     isMuted,
+    isVideoEnabled,
+    hasCameraDevice,
     permissionError,
     getAudioStream,
-    toggleMute,
+    getVideoStream,
+    toggleMute: toggleLocalMute,
+    toggleVideo: toggleLocalVideo,
+    switchCameraDevice,
+    switchMicrophoneDevice,
     stopStream,
   } = useMediaStream()
 
@@ -85,11 +108,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       remoteAudioRef.current.srcObject = null
     }
     setCallStatus('IDLE')
+    setCurrentCallType('AUDIO')
     setCurrentRoomId(null)
     setCaller(null)
     setTargetUser(null)
     setDuration(0)
     setIsMinimized(false)
+    setIsRemoteCameraOff(false)
+    setIsRemoteMuted(false)
+    setRemoteStream(null)
+    setIceConnectionState('new')
   }, [stopStream])
 
   // Bộ đếm thời gian đàm thoại
@@ -127,6 +155,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           setCurrentRoomId(msg.roomId || null)
+          setCurrentCallType(msg.callType || 'AUDIO')
           setCaller({
             id: msg.senderId,
             displayName: msg.senderName || 'Người dùng',
@@ -144,13 +173,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCallStatus('CONNECTING')
 
           try {
-            // Người gọi tạo WebRTC Offer và gửi sang đối phương
-            const offer = await webrtcManager.createOffer()
+            // Người gọi tạo WebRTC Offer (hỗ trợ cả Video) và gửi sang đối phương
+            const offer = await webrtcManager.createOffer(currentCallType === 'VIDEO')
             signalingService.sendSignal({
               type: 'CALL_OFFER',
               senderId: user?.id || 'me',
               receiverId: targetUser?.id || msg.senderId,
               roomId: currentRoomId || msg.roomId,
+              callType: currentCallType,
               payload: offer,
             })
           } catch (err) {
@@ -195,6 +225,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         case 'ICE_CANDIDATE': {
           if (msg.payload) {
             await webrtcManager.addIceCandidate(msg.payload)
+          }
+          break
+        }
+
+        case 'CAMERA_TOGGLE': {
+          if (msg.payload && typeof msg.payload.enabled === 'boolean') {
+            setIsRemoteCameraOff(!msg.payload.enabled)
+          }
+          break
+        }
+
+        case 'MIC_TOGGLE': {
+          if (msg.payload && typeof msg.payload.enabled === 'boolean') {
+            setIsRemoteMuted(!msg.payload.enabled)
           }
           break
         }
@@ -244,23 +288,25 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [callStatus, user, targetUser, caller, currentRoomId, cleanupCallState])
 
   // Khởi tạo cuộc gọi đi (Outgoing Call)
-  const startCall = async (target: CallUserInfo) => {
+  const startCall = async (target: CallUserInfo, type: 'AUDIO' | 'VIDEO' = 'AUDIO') => {
     if (callStatus !== 'IDLE') return
 
     setErrorMessage(null)
-    const stream = await getAudioStream()
+    const stream = type === 'VIDEO' ? await getVideoStream() : await getAudioStream()
     if (!stream) return
 
     const roomId = `${user?.id}_${target.id}_${Date.now()}`
     setCurrentRoomId(roomId)
+    setCurrentCallType(type)
     setTargetUser(target)
     setCallStatus('OUTGOING_RINGING')
 
     // Khởi tạo WebRTC Peer
     webrtcManager.init(
-      (remoteStream) => {
+      (rStream) => {
+        setRemoteStream(rStream)
         if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream
+          remoteAudioRef.current.srcObject = rStream
         }
       },
       (candidate) => {
@@ -271,6 +317,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roomId,
           payload: candidate.toJSON(),
         })
+      },
+      (state) => {
+        setIceConnectionState(state)
       }
     )
     webrtcManager.setLocalStream(stream)
@@ -284,6 +333,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderName: user?.displayName || 'Người dùng Teams',
       receiverId: target.id,
       roomId,
+      callType: type,
       payload: {
         avatarUrl: user?.avatarUrl,
         email: user?.email,
@@ -302,7 +352,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!caller || !currentRoomId) return
 
     callSounds.stopAll()
-    const stream = await getAudioStream()
+    const stream = currentCallType === 'VIDEO' ? await getVideoStream() : await getAudioStream()
     if (!stream) {
       rejectCall()
       return
@@ -310,9 +360,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Khởi tạo WebRTC Peer
     webrtcManager.init(
-      (remoteStream) => {
+      (rStream) => {
+        setRemoteStream(rStream)
         if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream
+          remoteAudioRef.current.srcObject = rStream
         }
       },
       (candidate) => {
@@ -323,6 +374,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roomId: currentRoomId,
           payload: candidate.toJSON(),
         })
+      },
+      (state) => {
+        setIceConnectionState(state)
       }
     )
     webrtcManager.setLocalStream(stream)
@@ -380,6 +434,50 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cleanupCallState()
   }
 
+  const toggleMute = () => {
+    const isNowEnabled = toggleLocalMute()
+    const otherUser = targetUser || caller
+    if (otherUser && currentRoomId) {
+      signalingService.sendSignal({
+        type: 'MIC_TOGGLE',
+        senderId: user?.id || 'me',
+        receiverId: otherUser.id,
+        roomId: currentRoomId,
+        payload: { enabled: isNowEnabled },
+      })
+    }
+  }
+
+  const toggleVideo = () => {
+    const isNowEnabled = toggleLocalVideo()
+    const otherUser = targetUser || caller
+    if (otherUser && currentRoomId) {
+      signalingService.sendSignal({
+        type: 'CAMERA_TOGGLE',
+        senderId: user?.id || 'me',
+        receiverId: otherUser.id,
+        roomId: currentRoomId,
+        payload: { enabled: isNowEnabled },
+      })
+    }
+  }
+
+  const handleSwitchCamera = async (deviceId: string): Promise<MediaStreamTrack | null> => {
+    const track = await switchCameraDevice(deviceId)
+    if (track) {
+      await webrtcManager.replaceVideoTrack(track)
+    }
+    return track
+  }
+
+  const handleSwitchMicrophone = async (deviceId: string): Promise<MediaStreamTrack | null> => {
+    const track = await switchMicrophoneDevice(deviceId)
+    if (track) {
+      await webrtcManager.replaceAudioTrack(track)
+    }
+    return track
+  }
+
   const toggleMinimize = () => {
     setIsMinimized((prev) => !prev)
   }
@@ -392,11 +490,19 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <CallContext.Provider
       value={{
         callStatus,
+        callType: currentCallType,
         currentRoomId,
         caller,
         targetUser,
         duration,
         isMuted,
+        isVideoEnabled,
+        isRemoteCameraOff,
+        isRemoteMuted,
+        hasCameraDevice,
+        localVideoStream,
+        remoteStream,
+        iceConnectionState,
         isMinimized,
         errorMessage: errorMessage || permissionError,
         startCall,
@@ -405,6 +511,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cancelCall,
         endCall,
         toggleMute,
+        toggleVideo,
+        switchCameraDevice: handleSwitchCamera,
+        switchMicrophoneDevice: handleSwitchMicrophone,
         toggleMinimize,
         clearError,
       }}

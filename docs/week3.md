@@ -8,9 +8,9 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 3
 
-- [ ] **Tiến độ chung toàn đội:** `33.3%` (TV1 hoàn thành 100%, TV2 và TV3 đã hoàn thiện kế hoạch chi tiết và bắt đầu triển khai)
+- [ ] **Tiến độ chung toàn đội:** `66.7%` (TV1 và TV2 đã hoàn thành 100% toàn bộ công việc của mình trong Tuần 3)
 - [x] **Mục tiêu 1:** Hệ thống Chat Nhóm (`GROUP`), Quản lý thành viên nhóm (Thêm/Xóa/Rời nhóm) và Upload/Hiển thị Hình ảnh & Tệp đính kèm (TV1) - **ĐÃ HOÀN THÀNH 100%**
-- [ ] **Mục tiêu 2:** Cuộc gọi Video 1-1 WebRTC P2P chất lượng cao, giao diện Picture-in-Picture (PiP), điều khiển Bật/Tắt Camera & Micro, và Bộ chọn thiết bị đầu vào (TV2) - **ĐANG THỰC HIỆN**
+- [x] **Mục tiêu 2:** Cuộc gọi Video 1-1 WebRTC P2P chất lượng cao, giao diện Picture-in-Picture (PiP), điều khiển Bật/Tắt Camera & Micro, và Bộ chọn thiết bị đầu vào (TV2) - **ĐÃ HOÀN THÀNH 100%**
 - [ ] **Mục tiêu 3:** Bảng vẽ tương tác nâng cao (Hình học, Text box), Đồng bộ nét vẽ thời gian thực có Throttling/Debouncing, Hiển thị con trỏ chuột đa người dùng và Lưu Snapshot vào CSDL (TV3) - **ĐANG THỰC HIỆN**
 
 ---
@@ -95,84 +95,84 @@
 > **Trọng tâm:** Nâng cấp WebRTC từ Audio-only lên Video Call 1-1 P2P chất lượng cao, thiết kế giao diện Picture-in-Picture (PiP) chuẩn Microsoft Teams, thanh điều khiển cuộc gọi nổi (Floating Bar), cơ chế bật/tắt Camera & Micro mượt mà, bộ chọn thiết bị đầu vào (Device Selector) và phân loại lưu vết lịch sử cuộc gọi Video.
 
 ### 📅 Ngày 1: Mở rộng Mô hình Tín hiệu Signaling & Phân loại Cuộc gọi Video Backend
-- [ ] **Sáng:** Phân tích giao thức Signaling hỗ trợ đàm phán Video SDP:
-  - [ ] Bổ sung trường `callType: "AUDIO" | "VIDEO"` trong `CallSession.java`, `CallLogDto.java` và `SignalMessage.java`.
-  - [ ] Mở rộng `SignalType.java` bổ sung các bản tin điều khiển mới:
-    - [ ] `CAMERA_TOGGLE`: Thông báo đối phương trạng thái camera (Bật/Tắt) tức thì.
-    - [ ] `MIC_TOGGLE`: Thông báo trạng thái micro của đối phương.
-    - [ ] `DEVICE_CHANGE`: Báo hiệu chuyển đổi nguồn thu media.
-- [ ] **Chiều:** Cập nhật `SignalingController.java` & `CallService.java`:
-  - [ ] Tiếp nhận tín hiệu `CALL_INVITE` mang `callType = "VIDEO"`, lưu chính xác vào CSDL `call_sessions`.
-  - [ ] Chuyển tiếp bản tin `CAMERA_TOGGLE` hai chiều qua `/user/{receiverId}/queue/signals`.
-  - [ ] Ghi log chi tiết chu kỳ sống của cuộc gọi Video từ lúc tạo Offer đến khi kết thúc phiên.
+- [x] **Sáng:** Phân tích giao thức Signaling hỗ trợ đàm phán Video SDP:
+  - [x] Bổ sung trường `callType: "AUDIO" | "VIDEO"` trong `CallSession.java`, `CallLogDto.java` và `SignalMessage.java`.
+  - [x] Mở rộng `SignalType.java` bổ sung các bản tin điều khiển mới:
+    - [x] `CAMERA_TOGGLE`: Thông báo đối phương trạng thái camera (Bật/Tắt) tức thì.
+    - [x] `MIC_TOGGLE`: Thông báo trạng thái micro của đối phương.
+    - [x] `DEVICE_CHANGE`: Báo hiệu chuyển đổi nguồn thu media.
+- [x] **Chiều:** Cập nhật `SignalingController.java` & `CallService.java`:
+  - [x] Tiếp nhận tín hiệu `CALL_INVITE` mang `callType = "VIDEO"`, lưu chính xác vào CSDL `call_sessions`.
+  - [x] Chuyển tiếp bản tin `CAMERA_TOGGLE` hai chiều qua `/user/{receiverId}/queue/signals`.
+  - [x] Ghi log chi tiết chu kỳ sống của cuộc gọi Video từ lúc tạo Offer đến khi kết thúc phiên.
 
 ### 📅 Ngày 2: Nâng cấp `useMediaStream` & Quản lý Thiết bị Đa phương tiện
-- [ ] **Sáng:** Nâng cấp Custom Hook `frontend/src/hooks/useMediaStream.ts`:
-  - [ ] Hỗ trợ gọi `navigator.mediaDevices.getUserMedia({ audio: true, video: true })` với độ phân giải HD tiêu chuẩn (`ideal: 1280x720`, `frameRate: 30`).
-  - [ ] Quản lý trạng thái: `isVideoEnabled`, `localVideoStream`, `hasCameraDevice`.
-  - [ ] Viết hàm `toggleVideo()`: Đảo trạng thái `videoTrack.enabled = !videoTrack.enabled` và bắn tín hiệu `CAMERA_TOGGLE`.
-  - [ ] Xây dựng cơ chế Fallback an toàn: Nếu thiết bị không có webcam hoặc người dùng từ chối cấp quyền Camera, hệ thống tự động giáng cấp về Audio Call mà không làm sập ứng dụng.
-- [ ] **Chiều:** Xây dựng module quản lý thiết bị `frontend/src/services/deviceService.ts`:
-  - [ ] Gọi `navigator.mediaDevices.enumerateDevices()` để phân loại danh sách Microphone, Webcam và Loa/Tai nghe.
-  - [ ] Viết hàm `switchCamera(deviceId)` và `switchMicrophone(deviceId)`.
-  - [ ] Viết hàm `switchSpeaker(deviceId)` sử dụng API `HTMLMediaElement.setSinkId()`.
+- [x] **Sáng:** Nâng cấp Custom Hook `frontend/src/hooks/useMediaStream.ts`:
+  - [x] Hỗ trợ gọi `navigator.mediaDevices.getUserMedia({ audio: true, video: true })` với độ phân giải HD tiêu chuẩn (`ideal: 1280x720`, `frameRate: 30`).
+  - [x] Quản lý trạng thái: `isVideoEnabled`, `localVideoStream`, `hasCameraDevice`.
+  - [x] Viết hàm `toggleVideo()`: Đảo trạng thái `videoTrack.enabled = !videoTrack.enabled` và bắn tín hiệu `CAMERA_TOGGLE`.
+  - [x] Xây dựng cơ chế Fallback an toàn: Nếu thiết bị không có webcam hoặc người dùng từ chối cấp quyền Camera, hệ thống tự động giáng cấp về Audio Call mà không làm sập ứng dụng.
+- [x] **Chiều:** Xây dựng module quản lý thiết bị `frontend/src/services/deviceService.ts`:
+  - [x] Gọi `navigator.mediaDevices.enumerateDevices()` để phân loại danh sách Microphone, Webcam và Loa/Tai nghe.
+  - [x] Viết hàm `switchCamera(deviceId)` và `switchMicrophone(deviceId)`.
+  - [x] Viết hàm `switchSpeaker(deviceId)` sử dụng API `HTMLMediaElement.setSinkId()`.
 
 ### 📅 Ngày 3: Nâng cấp WebRTC Core (`webrtcManager.ts`) cho Luồng Video P2P
-- [ ] **Sáng:** Mở rộng `frontend/src/services/webrtcManager.ts`:
-  - [ ] Hỗ trợ thêm cả 2 tracks `audio` và `video` vào đối tượng `RTCPeerConnection`.
-  - [ ] Cấu hình SDP munging ưu tiên codec video `VP8` / `H264` để đảm bảo độ trễ thấp và tương thích đa trình duyệt.
-  - [ ] Xử lý sự kiện `ontrack`: Tự động gắn luồng remote stream vào thẻ `<video autoPlay playsInline />` của đối phương.
-- [ ] **Chiều:** Quản lý thay thế Track (Track Replacement) và Renegotiation:
-  - [ ] Viết hàm `replaceVideoTrack(newTrack)` sử dụng `RTCRtpSender.replaceTrack()` để đổi webcam mà không làm đứt kết nối P2P.
-  - [ ] Lắng nghe sự kiện `negotiationneeded` để sẵn sàng cho tính năng nâng cấp cuộc gọi thoại lên video.
-  - [ ] Xử lý sự kiện `iceconnectionstatechange` phát hiện mạng chập chờn (`disconnected` / `failed`) để hiển thị cảnh báo người dùng.
+- [x] **Sáng:** Mở rộng `frontend/src/services/webrtcManager.ts`:
+  - [x] Hỗ trợ thêm cả 2 tracks `audio` và `video` vào đối tượng `RTCPeerConnection`.
+  - [x] Cấu hình SDP munging ưu tiên codec video `VP8` / `H264` để đảm bảo độ trễ thấp và tương thích đa trình duyệt.
+  - [x] Xử lý sự kiện `ontrack`: Tự động gắn luồng remote stream vào thẻ `<video autoPlay playsInline />` của đối phương.
+- [x] **Chiều:** Quản lý thay thế Track (Track Replacement) và Renegotiation:
+  - [x] Viết hàm `replaceVideoTrack(newTrack)` sử dụng `RTCRtpSender.replaceTrack()` để đổi webcam mà không làm đứt kết nối P2P.
+  - [x] Lắng nghe sự kiện `negotiationneeded` để sẵn sàng cho tính năng nâng cấp cuộc gọi thoại lên video.
+  - [x] Xử lý sự kiện `iceconnectionstatechange` phát hiện mạng chập chờn (`disconnected` / `failed`) để hiển thị cảnh báo người dùng.
 
 ### 📅 Ngày 4: Giao diện Video Call 1-1 Chuẩn Teams & Picture-in-Picture (PiP)
-- [ ] **Sáng:** Xây dựng Component `frontend/src/components/calling/VideoCallView.tsx`:
-  - [ ] Khung video đối phương (Remote Video) hiển thị toàn bộ không gian trung tâm, tỉ lệ `object-cover` mượt mà.
-  - [ ] Khung video của bản thân (Local Video) ở góc dưới bên phải dạng Picture-in-Picture (PiP):
-    - [ ] Bo góc `rounded-xl`, viền bóng tím nhẹ chuẩn Teams.
-    - [ ] Áp dụng hiệu ứng lật gương (Mirror Effect: `scale-x-[-1]`) để người dùng nhìn mình tự nhiên nhất.
-    - [ ] Hỗ trợ click hoặc kéo thả đổi vị trí các góc màn hình (Top-Right, Bottom-Right, Bottom-Left).
-- [ ] **Chiều:** Xử lý Fallback hiển thị khi tắt Camera:
-  - [ ] Nếu đối phương tắt Camera: Khung video đối phương mượt mà chuyển sang hiển thị Avatar lớn có vòng tròn tên viết tắt (Initials Avatar) kèm viền sáng phát hiện tiếng nói.
-  - [ ] Nếu bản thân tắt Camera: Khung PiP chuyển sang hiển thị Avatar nhỏ kèm icon `VideoOff`.
-  - [ ] Huy hiệu hiển thị chất lượng đường truyền (Connection Quality Badge: Xanh lá / Vàng / Đỏ).
+- [x] **Sáng:** Xây dựng Component `frontend/src/components/calling/VideoCallView.tsx`:
+  - [x] Khung video đối phương (Remote Video) hiển thị toàn bộ không gian trung tâm, tỉ lệ `object-cover` mượt mà.
+  - [x] Khung video của bản thân (Local Video) ở góc dưới bên phải dạng Picture-in-Picture (PiP):
+    - [x] Bo góc `rounded-xl`, viền bóng tím nhẹ chuẩn Teams.
+    - [x] Áp dụng hiệu ứng lật gương (Mirror Effect: `scale-x-[-1]`) để người dùng nhìn mình tự nhiên nhất.
+    - [x] Hỗ trợ click hoặc kéo thả đổi vị trí các góc màn hình (Top-Right, Bottom-Right, Bottom-Left).
+- [x] **Chiều:** Xử lý Fallback hiển thị khi tắt Camera:
+  - [x] Nếu đối phương tắt Camera: Khung video đối phương mượt mà chuyển sang hiển thị Avatar lớn có vòng tròn tên viết tắt (Initials Avatar) kèm viền sáng phát hiện tiếng nói.
+  - [x] Nếu bản thân tắt Camera: Khung PiP chuyển sang hiển thị Avatar nhỏ kèm icon `VideoOff`.
+  - [x] Huy hiệu hiển thị chất lượng đường truyền (Connection Quality Badge: Xanh lá / Vàng / Đỏ).
 
 ### 📅 Ngày 5: Thanh Điều Khiển Cuộc Gọi Nổi & Modal Cài Đặt Thiết Bị
-- [ ] **Sáng:** Nâng cấp `FloatingCallBar.tsx` và `ActiveCallModal.tsx`:
-  - [ ] Thanh điều khiển nổi bo tròn dạng thanh đen mờ (`bg-[#201f1f]/90 backdrop-blur-md`) cố định ở cạnh dưới video.
-  - [ ] Nút **Bật/Tắt Micro**: Icon `Mic` (nền tối khi bật) / `MicOff` (nền đỏ khi tắt).
-  - [ ] Nút **Bật/Tắt Camera**: Icon `Video` (xanh tím khi bật) / `VideoOff` (nền đỏ khi tắt).
-  - [ ] Nút **Cài đặt thiết bị (Settings)**: Icon `Settings` mở menu popover chọn nhanh thiết bị.
-  - [ ] Nút **Phóng to / Thu nhỏ toàn màn hình (Fullscreen Toggle)**: Icon `Maximize2` / `Minimize2`.
-  - [ ] Nút **Kết thúc cuộc gọi**: Nút tròn đỏ nổi bật ở giữa với icon `PhoneOff`.
-- [ ] **Chiều:** Xây dựng Component `frontend/src/components/calling/DeviceSettingsModal.tsx`:
-  - [ ] Dropdown chọn Microphone đầu vào kèm thanh đo cường độ âm thanh (Audio VU Meter Bar) chuyển động theo giọng nói.
-  - [ ] Dropdown chọn Camera đầu vào kèm khung xem trước (Camera Preview) trước khi lưu.
-  - [ ] Dropdown chọn Loa/Tai nghe đầu ra kèm nút "Phát âm thanh kiểm tra (Test Sound)".
+- [x] **Sáng:** Nâng cấp `FloatingCallBar.tsx` và `ActiveCallModal.tsx`:
+  - [x] Thanh điều khiển nổi bo tròn dạng thanh đen mờ (`bg-[#201f1f]/90 backdrop-blur-md`) cố định ở cạnh dưới video.
+  - [x] Nút **Bật/Tắt Micro**: Icon `Mic` (nền tối khi bật) / `MicOff` (nền đỏ khi tắt).
+  - [x] Nút **Bật/Tắt Camera**: Icon `Video` (xanh tím khi bật) / `VideoOff` (nền đỏ khi tắt).
+  - [x] Nút **Cài đặt thiết bị (Settings)**: Icon `Settings` mở menu popover chọn nhanh thiết bị.
+  - [x] Nút **Phóng to / Thu nhỏ toàn màn hình (Fullscreen Toggle)**: Icon `Maximize2` / `Minimize2`.
+  - [x] Nút **Kết thúc cuộc gọi**: Nút tròn đỏ nổi bật ở giữa với icon `PhoneOff`.
+- [x] **Chiều:** Xây dựng Component `frontend/src/components/calling/DeviceSettingsModal.tsx`:
+  - [x] Dropdown chọn Microphone đầu vào kèm thanh đo cường độ âm thanh (Audio VU Meter Bar) chuyển động theo giọng nói.
+  - [x] Dropdown chọn Camera đầu vào kèm khung xem trước (Camera Preview) trước khi lưu.
+  - [x] Dropdown chọn Loa/Tai nghe đầu ra kèm nút "Phát âm thanh kiểm tra (Test Sound)".
 
 ### 📅 Ngày 6: Tích hợp Nút Video Call vào ChatWindow & Lịch sử Cuộc gọi CallsPage
-- [ ] **Sáng:** Tích hợp nút Video Call vào Header của `ChatWindow.tsx`:
-  - [ ] Gắn sự kiện `onClick` cho nút `<button title="Bắt đầu cuộc gọi video (WebRTC Video)">` với icon `Video`.
-  - [ ] Khi bấm nút: Kích hoạt `startCall(conversation.otherUser.id, conversation.otherUser.displayName, 'VIDEO')`.
-  - [ ] Cập nhật `IncomingCallModal.tsx`: Hiển thị nhãn *"Cuộc gọi Video Teams đến..."* kèm icon camera nhấp nháy để người nhận nhận biết rõ ràng.
-- [ ] **Chiều:** Cập nhật trang `CallsPage.tsx`:
-  - [ ] Hiển thị biểu tượng phân loại cuộc gọi: Huy hiệu `Video` (icon tím) hoặc `Thoại` (icon xanh lá).
-  - [ ] Bổ sung bộ lọc phụ lọc riêng danh sách các cuộc gọi Video.
-  - [ ] Nút "Gọi lại" hỗ trợ gọi lại đúng loại cuộc gọi cũ (Voice hoặc Video).
+- [x] **Sáng:** Tích hợp nút Video Call vào Header của `ChatWindow.tsx`:
+  - [x] Gắn sự kiện `onClick` cho nút `<button title="Bắt đầu cuộc gọi video (WebRTC Video)">` với icon `Video`.
+  - [x] Khi bấm nút: Kích hoạt `startCall(conversation.otherUser.id, conversation.otherUser.displayName, 'VIDEO')`.
+  - [x] Cập nhật `IncomingCallModal.tsx`: Hiển thị nhãn *"Cuộc gọi Video Teams đến..."* kèm icon camera nhấp nháy để người nhận nhận biết rõ ràng.
+- [x] **Chiều:** Cập nhật trang `CallsPage.tsx`:
+  - [x] Hiển thị biểu tượng phân loại cuộc gọi: Huy hiệu `Video` (icon tím) hoặc `Thoại` (icon xanh lá).
+  - [x] Bổ sung bộ lọc phụ lọc riêng danh sách các cuộc gọi Video.
+  - [x] Nút "Gọi lại" hỗ trợ gọi lại đúng loại cuộc gọi cũ (Voice hoặc Video).
 
 ### 📅 Ngày 7: Unit Tests Backend, Kiểm thử Trình duyệt Chéo & Nghiệm thu
-- [ ] **Sáng:** Viết Unit Tests Backend & Kiểm tra Type Frontend:
-  - [ ] Mở rộng `CallServiceTest.java`: Kiểm tra khởi tạo và kết thúc cuộc gọi với `CallType.VIDEO`.
-  - [ ] Mở rộng `SignalingControllerTest.java`: Kiểm tra chuyển tiếp bản tin `CAMERA_TOGGLE` tới đúng user queue.
-  - [ ] Chạy `npm run build` xác nhận không có lỗi TypeScript hay cú pháp.
-- [ ] **Chiều:** Kiểm thử thực tế liên thông 2 Trình duyệt (Chrome & Edge):
-  - [ ] Đăng nhập 2 tài khoản, bấm nút Gọi Video từ khung chat.
-  - [ ] Xác nhận hình ảnh 2 bên hiển thị rõ nét, âm thanh đồng bộ, không bị méo tiếng hay giật khung hình.
-  - [ ] Bấm tắt/bật Camera trên từng bên, kiểm tra chuyển đổi tức thì giữa Video và Avatar.
-  - [ ] Kiểm tra di chuyển cửa sổ PiP và phóng to toàn màn hình.
-  - [ ] Kết thúc cuộc gọi và xác nhận lịch sử cuộc gọi ghi nhận chính xác `VIDEO`.
+- [x] **Sáng:** Viết Unit Tests Backend & Kiểm tra Type Frontend:
+  - [x] Mở rộng `CallServiceTest.java`: Kiểm tra khởi tạo và kết thúc cuộc gọi với `CallType.VIDEO`.
+  - [x] Mở rộng `SignalingControllerTest.java`: Kiểm tra chuyển tiếp bản tin `CAMERA_TOGGLE` tới đúng user queue.
+  - [x] Chạy `npm run build` xác nhận không có lỗi TypeScript hay cú pháp.
+- [x] **Chiều:** Kiểm thử thực tế liên thông 2 Trình duyệt (Chrome & Edge):
+  - [x] Đăng nhập 2 tài khoản, bấm nút Gọi Video từ khung chat.
+  - [x] Xác nhận hình ảnh 2 bên hiển thị rõ nét, âm thanh đồng bộ, không bị méo tiếng hay giật khung hình.
+  - [x] Bấm tắt/bật Camera trên từng bên, kiểm tra chuyển đổi tức thì giữa Video và Avatar.
+  - [x] Kiểm tra di chuyển cửa sổ PiP và phóng to toàn màn hình.
+  - [x] Kết thúc cuộc gọi và xác nhận lịch sử cuộc gọi ghi nhận chính xác `VIDEO`.
 
 ---
 
@@ -269,13 +269,13 @@
 | [x] | **W3-TV1-05** | **TV1** | Giao diện `GroupMembersPanel` quản lý thành viên | 6h | Xem danh sách thành viên, thêm người mới, Admin xóa thành viên, rời nhóm. |
 | [x] | **W3-TV1-06** | **TV1** | Đính kèm Ảnh/File & Lightbox xem ảnh trong `ChatWindow` | 8h | Preview tệp trước khi gửi, hiển thị ảnh inline + Lightbox, thẻ tải file trực tiếp. |
 | [x] | **W3-TV1-07** | **TV1** | Unit Tests `ChatServiceTest` & `FileStorageServiceTest` | 4h | Toàn bộ test suite Backend & Frontend build PASS 100%. |
-| [ ] | **W3-TV2-01** | **TV2** | Mở rộng Signaling Server & Phân loại Cuộc gọi Video | 6h | Lưu đúng `callType = VIDEO` vào CSDL; xử lý bản tin `CAMERA_TOGGLE` và `MIC_TOGGLE`. |
-| [ ] | **W3-TV2-02** | **TV2** | Nâng cấp `useMediaStream` & Dịch vụ Device Selector | 6h | Thu luồng Video HD 720p, chuyển đổi camera/micro/loa mượt mà, an toàn khi không có webcam. |
-| [ ] | **W3-TV2-03** | **TV2** | Nâng cấp WebRTC Core (`webrtcManager.ts`) cho Video P2P | 8h | Đàm phán video SDP VP8/H264, gắn video stream vào DOM, hỗ trợ `replaceVideoTrack`. |
-| [ ] | **W3-TV2-04** | **TV2** | Giao diện Video Call 1-1 & Picture-in-Picture (PiP) | 8h | Video đối phương toàn màn hình, local PiP lật gương bo góc, avatar fallback khi tắt cam. |
-| [ ] | **W3-TV2-05** | **TV2** | Thanh Điều Khiển Nổi & Modal Cài Đặt Thiết Bị | 6h | Nút bật/tắt cam/mic nền đỏ khi tắt, thanh đo âm lượng nhảy theo giọng nói, test loa. |
-| [ ] | **W3-TV2-06** | **TV2** | Tích hợp Nút Video Call vào Chat & Trang Lịch sử | 6h | Bấm gọi video từ header chat; trang CallsPage hiển thị huy hiệu Video và lọc chuẩn xác. |
-| [ ] | **W3-TV2-07** | **TV2** | Unit Tests Backend & Test Video Call 2 Trình duyệt | 6h | `./mvnw test` đạt 100% PASS; gọi video mượt mà, không giật hình giữa 2 trình duyệt. |
+| [x] | **W3-TV2-01** | **TV2** | Mở rộng Signaling Server & Phân loại Cuộc gọi Video | 6h | Lưu đúng `callType = VIDEO` vào CSDL; xử lý bản tin `CAMERA_TOGGLE` và `MIC_TOGGLE`. |
+| [x] | **W3-TV2-02** | **TV2** | Nâng cấp `useMediaStream` & Dịch vụ Device Selector | 6h | Thu luồng Video HD 720p, chuyển đổi camera/micro/loa mượt mà, an toàn khi không có webcam. |
+| [x] | **W3-TV2-03** | **TV2** | Nâng cấp WebRTC Core (`webrtcManager.ts`) cho Video P2P | 8h | Đàm phán video SDP VP8/H264, gắn video stream vào DOM, hỗ trợ `replaceVideoTrack`. |
+| [x] | **W3-TV2-04** | **TV2** | Giao diện Video Call 1-1 & Picture-in-Picture (PiP) | 8h | Video đối phương toàn màn hình, local PiP lật gương bo góc, avatar fallback khi tắt cam. |
+| [x] | **W3-TV2-05** | **TV2** | Thanh Điều Khiển Nổi & Modal Cài Đặt Thiết Bị | 6h | Nút bật/tắt cam/mic nền đỏ khi tắt, thanh đo âm lượng nhảy theo giọng nói, test loa. |
+| [x] | **W3-TV2-06** | **TV2** | Tích hợp Nút Video Call vào Chat & Trang Lịch sử | 6h | Bấm gọi video từ header chat; trang CallsPage hiển thị huy hiệu Video và lọc chuẩn xác. |
+| [x] | **W3-TV2-07** | **TV2** | Unit Tests Backend & Test Video Call 2 Trình duyệt | 6h | `./mvnw test` đạt 100% PASS; gọi video mượt mà, không giật hình giữa 2 trình duyệt. |
 | [ ] | **W3-TV3-01** | **TV3** | Mô hình Dữ liệu Bảng vẽ Vector, Entity & DTOs Backend | 6h | Schema JSON vector chuẩn xác; Entity `WhiteboardSession` và `WhiteboardSnapshot` lưu PostgreSQL. |
 | [ ] | **W3-TV3-02** | **TV3** | WebSocket STOMP Controller & REST API Whiteboard | 6h | Broadcast nét vẽ `/topic/whiteboard/{id}`, API lưu và khôi phục snapshot JSON hoạt động 200 OK. |
 | [ ] | **W3-TV3-03** | **TV3** | Bộ Công cụ Hình học Vector (Hộp, Tròn, Đường, Mũi tên) | 8h | Kéo thả vẽ hình có preview mượt mà; giữ Shift khóa tỷ lệ vuông/tròn hoàn hảo. |

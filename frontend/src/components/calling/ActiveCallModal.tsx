@@ -1,10 +1,12 @@
 import React from 'react'
 import { Mic, MicOff, PhoneOff, Minimize2 } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
+import { VideoCallView } from './VideoCallView'
 
 export const ActiveCallModal: React.FC = () => {
   const {
     callStatus,
+    callType,
     targetUser,
     caller,
     duration,
@@ -23,6 +25,17 @@ export const ActiveCallModal: React.FC = () => {
     isMinimized
   ) {
     return null
+  }
+
+  // Khi đang đàm thoại cuộc gọi Video -> Hiển thị VideoCallView toàn diện
+  if (callType === 'VIDEO' && callStatus === 'CONNECTED') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in p-2 sm:p-6">
+        <div className="relative w-full h-full max-w-6xl max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl border border-[#383838]">
+          <VideoCallView />
+        </div>
+      </div>
+    )
   }
 
   const activeUser = targetUser || caller
@@ -72,7 +85,7 @@ export const ActiveCallModal: React.FC = () => {
           {callStatus === 'OUTGOING_RINGING' && (
             <p className="text-gray-400 flex items-center justify-center gap-1.5 animate-pulse">
               <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-              Đang đổ chuông...
+              {callType === 'VIDEO' ? 'Đang gọi video...' : 'Đang đổ chuông...'}
             </p>
           )}
 

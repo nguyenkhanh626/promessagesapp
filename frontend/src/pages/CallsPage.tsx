@@ -7,6 +7,7 @@ import {
   Clock,
   RefreshCw,
   Search,
+  Video,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useCall } from '../context/CallContext'
@@ -144,7 +145,7 @@ export const CallsPage: React.FC = () => {
       id: targetId,
       displayName,
       avatarUrl,
-    })
+    }, item.callType || 'AUDIO')
   }
 
   const getInitials = (name: string) => {
@@ -255,6 +256,19 @@ export const CallsPage: React.FC = () => {
                         {displayName}
                       </h4>
                       <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
+                        {/* Nhãn loại cuộc gọi (Video hoặc Thoại) */}
+                        {item.callType === 'VIDEO' ? (
+                          <span className="inline-flex items-center gap-1 text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded">
+                            <Video size={12} />
+                            Video
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-sky-400 font-medium bg-sky-500/10 px-2 py-0.5 rounded">
+                            <Phone size={12} />
+                            Thoại
+                          </span>
+                        )}
+
                         {/* Nhãn phân loại Cuộc gọi đến / đi / nhỡ */}
                         {isMissed ? (
                           <span className="inline-flex items-center gap-1 text-rose-400 font-semibold bg-rose-500/10 px-2 py-0.5 rounded">

@@ -140,4 +140,42 @@ class SignalingControllerTest {
         verify(callService).cancelCall(eq("room-123"));
         verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(cancelMsg));
     }
+
+    @Test
+    @DisplayName("Gửi CALL_INVITE với callType = VIDEO -> initiateCall được gọi với CallType.VIDEO")
+    void handleP2PSignal_VideoInvite() {
+        SignalMessage videoInviteMsg = SignalMessage.builder()
+                .type(SignalType.CALL_INVITE)
+                .receiverId("user-callee")
+                .roomId("room-video-123")
+                .callType(com.team17.chatapp.calling.entity.CallType.VIDEO)
+                .build();
+
+        when(callService.isUserInCall("user-callee")).thenReturn(false);
+
+        signalingController.handleP2PSignal(videoInviteMsg, principal);
+
+        verify(callService).initiateCall(
+                eq("user-sender"),
+                eq("user-callee"),
+                eq("room-video-123"),
+                eq(com.team17.chatapp.calling.entity.CallType.VIDEO)
+        );
+        verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(videoInviteMsg));
+    }
+
+    @Test
+    @DisplayName("Gửi CAMERA_TOGGLE -> Chuyển tiếp tín hiệu toggle camera sang đối phương")
+    void handleP2PSignal_CameraToggle() {
+        SignalMessage toggleMsg = SignalMessage.builder()
+                .type(SignalType.CAMERA_TOGGLE)
+                .receiverId("user-callee")
+                .roomId("room-video-123")
+                .payload(java.util.Map.of("enabled", false))
+                .build();
+
+        signalingController.handleP2PSignal(toggleMsg, principal);
+
+        verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(toggleMsg));
+    }
 }

@@ -106,13 +106,18 @@ public class SignalingController {
                     : message.getReceiverId() + "_" + sender);
         message.setRoomId(roomId);
 
+        CallType resolvedCallType = (message.getCallType() != null) ? message.getCallType() : CallType.AUDIO;
+
         // Xử lý kiểm tra người nhận có đang bận nghe máy không khi nhận lời mời CALL_INVITE
         if (message.getType() == SignalType.CALL_INVITE) {
+            log.info("📞 [WebRTC Invite] Khởi tạo cuộc gọi ({}) từ '{}' tới '{}' (Room: '{}')",
+                    resolvedCallType, sender, message.getReceiverId(), roomId);
+
             if (callService.isUserInCall(receiverDbId)) {
                 log.warn("📴 [WebRTC Signal 1-1] Người nhận '{}' đang bận trong cuộc gọi khác!", message.getReceiverId());
                 
                 // Ghi nhận cuộc gọi bận vào CSDL
-                callService.initiateCall(senderDbId, receiverDbId, roomId, CallType.AUDIO);
+                callService.initiateCall(senderDbId, receiverDbId, roomId, resolvedCallType);
                 callService.markCallBusy(roomId);
 
                 // Gửi thông báo CALL_BUSY ngược lại cho người gọi
@@ -122,6 +127,7 @@ public class SignalingController {
                         .senderName("Hệ thống")
                         .receiverId(sender)
                         .roomId(roomId)
+                        .callType(resolvedCallType)
                         .payload(Map.of(
                                 "reason", "Người nhận hiện đang trong cuộc gọi khác",
                                 "busyUser", message.getReceiverId()
@@ -141,13 +147,17 @@ public class SignalingController {
                         senderDbId,
                         receiverDbId,
                         roomId,
-                        CallType.AUDIO
+                        resolvedCallType
                 );
                 case CALL_ACCEPT -> callService.acceptCall(roomId, senderDbId);
                 case CALL_REJECT -> callService.rejectCall(roomId);
                 case CALL_CANCEL -> callService.cancelCall(roomId);
                 case CALL_TIMEOUT -> callService.timeoutCall(roomId);
                 case CALL_END -> callService.endCall(roomId);
+                case CAMERA_TOGGLE, MIC_TOGGLE, DEVICE_CHANGE -> {
+                    log.info("🎛️ [WebRTC Control] User '{}' gửi tín hiệu {} (Payload: {}, Room: '{}')",
+                            sender, message.getType(), message.getPayload(), roomId);
+                }
                 default -> { /* Offer, Answer, ICE Candidate chỉ chuyển tiếp qua lại */ }
             }
         }

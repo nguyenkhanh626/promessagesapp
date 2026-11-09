@@ -1,17 +1,20 @@
 import React from 'react'
-import { Mic, MicOff, PhoneOff, Maximize2 } from 'lucide-react'
+import { Mic, MicOff, PhoneOff, Maximize2, Video, VideoOff } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
 
 export const FloatingCallBar: React.FC = () => {
   const {
     callStatus,
+    callType,
     targetUser,
     caller,
     duration,
     isMuted,
+    isVideoEnabled,
     isMinimized,
     endCall,
     toggleMute,
+    toggleVideo,
     toggleMinimize,
   } = useCall()
 
@@ -63,6 +66,19 @@ export const FloatingCallBar: React.FC = () => {
         >
           {isMuted ? <MicOff size={15} /> : <Mic size={15} />}
         </button>
+
+        {callType === 'VIDEO' && (
+          <button
+            type="button"
+            onClick={toggleVideo}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+              !isVideoEnabled ? 'bg-rose-600 text-white' : 'bg-[#5B5FC7] text-white hover:bg-[#4f52b2]'
+            }`}
+            title={isVideoEnabled ? 'Tắt camera' : 'Bật camera'}
+          >
+            {isVideoEnabled ? <Video size={15} /> : <VideoOff size={15} />}
+          </button>
+        )}
 
         <button
           type="button"

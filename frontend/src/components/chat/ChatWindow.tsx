@@ -111,7 +111,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       id: otherId,
       displayName: conversation.otherUser?.displayName || conversation.name || 'Người dùng',
       avatarUrl: conversation.otherUser?.avatarUrl || conversation.avatarUrl,
-    })
+    }, 'AUDIO')
+  }
+
+  const handleStartVideoCall = () => {
+    if (!conversation) return
+    const otherId = conversation.otherUser?.id
+    if (!otherId) return
+
+    startCall({
+      id: otherId,
+      displayName: conversation.otherUser?.displayName || conversation.name || 'Người dùng',
+      avatarUrl: conversation.otherUser?.avatarUrl || conversation.avatarUrl,
+    }, 'VIDEO')
   }
 
   const formatMessageTime = (dateStr: string) => {
@@ -228,7 +240,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
               <button
                 type="button"
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors"
+                onClick={handleStartVideoCall}
+                disabled={callStatus !== 'IDLE' || !conversation.otherUser}
+                className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors disabled:opacity-40"
                 title="Bắt đầu cuộc gọi video (WebRTC Video)"
               >
                 <Video size={18} />
