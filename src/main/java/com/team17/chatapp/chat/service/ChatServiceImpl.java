@@ -436,6 +436,53 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<MessageDto> searchMessagesInConversation(UUID conversationId, UUID currentUserId, String keyword) {
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, currentUserId)) {
+            throw new AppException("Bạn không có quyền tìm kiếm trong cuộc trò chuyện này", HttpStatus.FORBIDDEN);
+        }
+
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+
+        List<Message> matches = messageRepository.searchMessagesInConversation(conversationId, keyword.trim());
+        return mapMessagesToDtos(matches);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MessageDto> searchAllMyMessages(UUID currentUserId, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+
+        List<Message> matches = messageRepository.searchMessagesForUser(currentUserId, keyword.trim());
+        return mapMessagesToDtos(matches);
+    }
+
+    private List<MessageDto> mapMessagesToDtos(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> senderIds = messages.stream()
+                .map(Message::getSenderId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<UUID, User> userMap = userRepository.findAllById(senderIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        return messages.stream().map(msg -> {
+            User sender = userMap.get(msg.getSenderId());
+            String senderName = sender != null ? sender.getDisplayName() : "Thành viên";
+            String senderAvatar = sender != null ? sender.getAvatarUrl() : null;
+            return MessageDto.from(msg, senderName, senderAvatar);
+        }).collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public MessageDto saveMessage(UUID conversationId, UUID senderId, SendMessageRequest request) {
         if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, senderId)) {

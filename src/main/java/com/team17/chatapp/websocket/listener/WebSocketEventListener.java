@@ -1,5 +1,6 @@
 package com.team17.chatapp.websocket.listener;
 
+import com.team17.chatapp.chat.service.PresenceService;
 import com.team17.chatapp.websocket.service.UserSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +15,7 @@ import java.security.Principal;
 
 /**
  * Lắng nghe và xử lý các sự kiện vòng đời kết nối WebSocket STOMP
- * (Connect, Disconnect, Subscribe)
+ * (Connect, Disconnect, Subscribe) và đồng bộ trạng thái Presence
  */
 @Slf4j
 @Component
@@ -22,6 +23,7 @@ import java.security.Principal;
 public class WebSocketEventListener {
 
     private final UserSessionRegistry sessionRegistry;
+    private final PresenceService presenceService;
 
     /**
      * Sự kiện khi Client thiết lập kết nối STOMP thành công
@@ -35,6 +37,7 @@ public class WebSocketEventListener {
         String username = (user != null) ? user.getName() : "Anonymous-" + sessionId;
 
         sessionRegistry.registerSession(sessionId, username);
+        presenceService.handleUserConnected(username);
 
         log.info("🟢 [WebSocket CONNECT] Phiên mới kết nối thành công: sessionId='{}', user='{}' | Tổng sessions: {}",
                 sessionId, username, sessionRegistry.getTotalActiveSessions());
@@ -49,6 +52,9 @@ public class WebSocketEventListener {
         String sessionId = headerAccessor.getSessionId();
 
         String userId = sessionRegistry.unregisterSession(sessionId);
+        if (userId != null && !sessionRegistry.isUserOnline(userId)) {
+            presenceService.handleUserDisconnected(userId);
+        }
 
         log.info("🔴 [WebSocket DISCONNECT] Phiên đã ngắt kết nối: sessionId='{}', user='{}' | Còn lại: {} sessions",
                 sessionId, (userId != null ? userId : "Unknown"), sessionRegistry.getTotalActiveSessions());

@@ -6,7 +6,9 @@ import type {
   CreateGroupPayload,
   FileUploadResponse,
   Message,
+  PresenceEvent,
   SendMessagePayload,
+  UserPresenceStatus,
 } from '../types/chat'
 
 export const chatService = {
@@ -67,11 +69,45 @@ export const chatService = {
     return response.data.data
   },
 
+  async searchMessagesInConversation(conversationId: string, query: string): Promise<Message[]> {
+    const response = await apiClient.get<ApiResponse<Message[]>>(
+      `/conversations/${conversationId}/messages/search?q=${encodeURIComponent(query)}`
+    )
+    return response.data.data
+  },
+
+  async searchAllMessages(query: string): Promise<Message[]> {
+    const response = await apiClient.get<ApiResponse<Message[]>>(
+      `/messages/search?q=${encodeURIComponent(query)}`
+    )
+    return response.data.data
+  },
+
   async sendMessage(conversationId: string, payload: SendMessagePayload): Promise<Message> {
     const response = await apiClient.post<ApiResponse<Message>>(
       `/conversations/${conversationId}/messages`,
       { messageType: 'TEXT', ...payload }
     )
+    return response.data.data
+  },
+
+  async sendTypingIndicator(conversationId: string, typing: boolean): Promise<void> {
+    await apiClient.post(`/conversations/${conversationId}/typing`, {
+      conversationId,
+      typing,
+    })
+  },
+
+  async updateMyStatus(status: UserPresenceStatus): Promise<PresenceEvent> {
+    const response = await apiClient.put<ApiResponse<PresenceEvent>>('/users/me/status', { status })
+    return response.data.data
+  },
+
+  async getUserDirectory(query: string = '', status?: UserPresenceStatus): Promise<User[]> {
+    const params = new URLSearchParams()
+    if (query) params.set('q', query)
+    if (status) params.set('status', status)
+    const response = await apiClient.get<ApiResponse<User[]>>(`/users/directory?${params.toString()}`)
     return response.data.data
   },
 

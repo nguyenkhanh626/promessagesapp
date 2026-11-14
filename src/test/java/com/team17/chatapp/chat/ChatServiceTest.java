@@ -13,6 +13,7 @@ import com.team17.chatapp.chat.entity.Conversation;
 import com.team17.chatapp.chat.entity.ConversationMember;
 import com.team17.chatapp.chat.entity.ConversationType;
 import com.team17.chatapp.chat.entity.MemberRole;
+import com.team17.chatapp.chat.entity.Message;
 import com.team17.chatapp.chat.entity.MessageType;
 import com.team17.chatapp.chat.repository.ConversationMemberRepository;
 import com.team17.chatapp.chat.repository.ConversationRepository;
@@ -303,5 +304,30 @@ class ChatServiceTest {
         assertEquals("http://localhost:8080/api/files/sample.png", result.getFileUrl());
         assertEquals("sample.png", result.getFileName());
         assertEquals(12345L, result.getFileSize());
+    }
+
+    @Test
+    @DisplayName("Tuần 4: Tìm kiếm tin nhắn theo từ khóa trong cuộc trò chuyện thành công")
+    void testSearchMessagesInConversation_Success() {
+        UUID conversationId = sampleConversation.getId();
+        Message matchedMsg = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user1Id)
+                .content("Báo cáo tiến độ tuần 4")
+                .messageType(MessageType.TEXT)
+                .build();
+        matchedMsg.setId(UUID.randomUUID());
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(messageRepository.searchMessagesInConversation(conversationId, "tuần 4"))
+                .thenReturn(List.of(matchedMsg));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user1));
+
+        List<MessageDto> results = chatService.searchMessagesInConversation(conversationId, user1Id, "tuần 4");
+
+        assertNotNull(results);
+        assertEquals(1, results.size());
+        assertEquals("Báo cáo tiến độ tuần 4", results.get(0).getContent());
+        assertEquals("Nguyen Van A", results.get(0).getSenderName());
     }
 }

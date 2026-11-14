@@ -5,6 +5,7 @@ import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.dto.ChatMessagePayload;
 import com.team17.chatapp.chat.dto.MessageDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
+import com.team17.chatapp.chat.dto.TypingEventPayload;
 import com.team17.chatapp.chat.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,5 +57,25 @@ public class ChatWebSocketController {
         String destination = "/topic/chat/" + payload.getConversationId();
         messagingTemplate.convertAndSend(destination, messageDto);
         log.info("Broadcast tin nhắn mới tới topic {}: {}", destination, messageDto.getContent());
+    }
+
+    @MessageMapping("/chat.typing")
+    public void handleTypingIndicator(@Payload TypingEventPayload payload, Principal principal) {
+        if (payload == null || payload.getConversationId() == null) {
+            return;
+        }
+
+        if (principal != null && principal.getName() != null) {
+            userRepository.findByEmail(principal.getName()).ifPresent(user -> {
+                payload.setUserId(user.getId());
+                payload.setDisplayName(user.getDisplayName());
+                payload.setAvatarUrl(user.getAvatarUrl());
+            });
+        }
+
+        String destination = "/topic/chat/" + payload.getConversationId() + "/typing";
+        messagingTemplate.convertAndSend(destination, payload);
+        log.debug("Broadcast typing event tới {}: user={}, typing={}",
+                destination, payload.getDisplayName(), payload.isTyping());
     }
 }

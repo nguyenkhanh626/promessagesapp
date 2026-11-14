@@ -3,10 +3,18 @@ import { ChatSidebar } from '../components/chat/ChatSidebar'
 import { ChatWindow } from '../components/chat/ChatWindow'
 import { CreateGroupModal } from '../components/chat/CreateGroupModal'
 import { GroupMembersPanel } from '../components/chat/GroupMembersPanel'
+import { UserDirectoryModal } from '../components/chat/UserDirectoryModal'
 import { chatService } from '../services/chatService'
 import { useAuth } from '../context/AuthContext'
 import { useChatWebSocket } from '../hooks/useChatWebSocket'
-import type { Conversation, ConversationMember, Message } from '../types/chat'
+import type {
+  Conversation,
+  ConversationMember,
+  Message,
+  PresenceEvent,
+  TypingEvent,
+  UserPresenceStatus,
+} from '../types/chat'
 import type { User } from '../types/auth'
 
 export const ChatPage: React.FC = () => {
@@ -15,8 +23,13 @@ export const ChatPage: React.FC = () => {
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [groupMembers, setGroupMembers] = useState<ConversationMember[]>([])
+  const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([])
+  const [myStatus, setMyStatus] = useState<UserPresenceStatus>(
+    (currentUser?.status as UserPresenceStatus) || 'ONLINE'
+  )
   const [showMembersPanel, setShowMembersPanel] = useState(false)
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false)
+  const [showDirectoryModal, setShowDirectoryModal] = useState(false)
   const [searchResults, setSearchResults] = useState<User[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isSending, setIsSending] = useState(false)
@@ -40,6 +53,7 @@ export const ChatPage: React.FC = () => {
 
   // 2. Tải lịch sử tin nhắn và danh sách thành viên khi chọn một cuộc trò chuyện
   useEffect(() => {
+    setTypingUsers([])
     if (!activeConversation) {
       setMessages([])
       setGroupMembers([])
@@ -82,6 +96,9 @@ export const ChatPage: React.FC = () => {
       return [...prev, newMsg]
     })
 
+    // Khi nhận được tin nhắn mới từ người đang gõ, xóa trạng thái typing của người đó
+    setTypingUsers((prev) => prev.filter((t) => t.userId !== newMsg.senderId))
+
     const previewText =
       newMsg.messageType === 'IMAGE'
         ? `📷 [Hình ảnh] ${newMsg.content}`
@@ -108,10 +125,78 @@ export const ChatPage: React.FC = () => {
     })
   }, [])
 
-  // Lắng nghe WebSocket
-  useChatWebSocket(activeConversation ? activeConversation.id : null, token, handleIncomingMessage)
+  // 4. Xử lý nhận sự kiện Typing Indicator thời gian thực
+  const handleTypingEvent = useCallback((event: TypingEvent) => {
+    if (!event || !event.userId) return
+    setTypingUsers((prev) => {
+      const filtered = prev.filter((t) => t.userId !== event.userId)
+      if (event.typing) {
+        return [...filtered, event]
+      }
+      return filtered
+    })
+  }, [])
 
-  // 4. Gửi tin nhắn mới (hỗ trợ đính kèm hình ảnh / file)
+  // 5. Xử lý nhận sự kiện Presence (Online/Offline/Busy/Away) thời gian thực
+  const handlePresenceEvent = useCallback((event: PresenceEvent) => {
+    if (!event || !event.userId) return
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.otherUser && c.otherUser.id === event.userId) {
+          return {
+            ...c,
+            otherUser: { ...c.otherUser, status: event.status },
+          }
+        }
+        return c
+      })
+    )
+
+    setActiveConversation((prev) => {
+      if (prev && prev.otherUser && prev.otherUser.id === event.userId) {
+        return {
+          ...prev,
+          otherUser: { ...prev.otherUser, status: event.status },
+        }
+      }
+      return prev
+    })
+
+    setGroupMembers((prev) =>
+      prev.map((m) => (m.userId === event.userId ? { ...m, status: event.status } : m))
+    )
+  }, [])
+
+  // Lắng nghe WebSocket (Chat + Typing + Presence)
+  const { sendTypingSignal } = useChatWebSocket(
+    activeConversation ? activeConversation.id : null,
+    token,
+    handleIncomingMessage,
+    handleTypingEvent,
+    handlePresenceEvent
+  )
+
+  const handleTypingChange = useCallback(
+    (typing: boolean) => {
+      if (!activeConversation) return
+      sendTypingSignal(typing)
+      chatService.sendTypingIndicator(activeConversation.id, typing).catch(() => {})
+    },
+    [activeConversation, sendTypingSignal]
+  )
+
+  // 6. Đổi trạng thái hoạt động cá nhân
+  const handleChangeMyStatus = async (status: UserPresenceStatus) => {
+    setMyStatus(status)
+    try {
+      await chatService.updateMyStatus(status)
+    } catch (err) {
+      console.error('Không thể cập nhật trạng thái:', err)
+    }
+  }
+
+  // 7. Gửi tin nhắn mới (hỗ trợ đính kèm hình ảnh / file)
   const handleSendMessage = async (content: string, attachmentFile?: File | null) => {
     if (!activeConversation) return
     setIsSending(true)
@@ -140,7 +225,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 5. Tìm kiếm người dùng
+  // 8. Tìm kiếm người dùng
   const handleSearchUsers = async (query: string) => {
     setIsSearching(true)
     try {
@@ -153,7 +238,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 6. Bắt đầu chat 1-1 với một người dùng từ tìm kiếm
+  // 9. Bắt đầu chat 1-1 với một người dùng
   const handleStartDirectChat = async (targetUser: User) => {
     try {
       const conversation = await chatService.getOrCreateDirectConversation(targetUser.id)
@@ -170,7 +255,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 7. Tạo nhóm chat mới
+  // 10. Tạo nhóm chat mới
   const handleCreateGroup = async (name: string, memberIds: string[]) => {
     const newGroup = await chatService.createGroupConversation({ name, memberIds })
     setConversations((prev) => [newGroup, ...prev])
@@ -180,7 +265,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 8. Thêm thành viên mới vào nhóm
+  // 11. Thêm thành viên mới vào nhóm
   const handleAddMembers = async (userIds: string[]) => {
     if (!activeConversation) return
     try {
@@ -199,20 +284,18 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 9. Xóa thành viên hoặc rời nhóm
+  // 12. Xóa thành viên hoặc rời nhóm
   const handleRemoveMember = async (targetUserId: string) => {
     if (!activeConversation) return
     try {
       await chatService.removeGroupMember(activeConversation.id, targetUserId)
 
       if (targetUserId === currentUser?.id) {
-        // Người dùng hiện tại tự rời nhóm
         const remaining = conversations.filter((c) => c.id !== activeConversation.id)
         setConversations(remaining)
         setActiveConversation(remaining.length > 0 ? remaining[0] : null)
         setShowMembersPanel(false)
       } else {
-        // Admin xóa thành viên khác
         const updatedMembers = await chatService.getConversationMembers(activeConversation.id)
         setGroupMembers(updatedMembers)
         setActiveConversation((prev) =>
@@ -239,6 +322,9 @@ export const ChatPage: React.FC = () => {
         onSelectConversation={(conv) => setActiveConversation(conv)}
         onStartDirectChat={handleStartDirectChat}
         onOpenCreateGroup={() => setShowCreateGroupModal(true)}
+        onOpenDirectory={() => setShowDirectoryModal(true)}
+        currentUserStatus={myStatus}
+        onChangeMyStatus={handleChangeMyStatus}
         searchResults={searchResults}
         onSearchUsers={handleSearchUsers}
         isSearching={isSearching}
@@ -249,6 +335,8 @@ export const ChatPage: React.FC = () => {
         messages={messages}
         currentUser={currentUser}
         onSendMessage={handleSendMessage}
+        onTypingChange={handleTypingChange}
+        typingUsers={typingUsers}
         isSending={isSending}
         showMembersPanel={showMembersPanel}
         onToggleMembersPanel={() => setShowMembersPanel((prev) => !prev)}
@@ -274,6 +362,12 @@ export const ChatPage: React.FC = () => {
         searchResults={searchResults}
         onSearchUsers={handleSearchUsers}
         isSearching={isSearching}
+      />
+
+      <UserDirectoryModal
+        isOpen={showDirectoryModal}
+        onClose={() => setShowDirectoryModal(false)}
+        onStartDirectChat={handleStartDirectChat}
       />
     </div>
   )

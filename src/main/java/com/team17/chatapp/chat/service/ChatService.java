@@ -35,6 +35,10 @@ public interface ChatService {
 
     List<MessageDto> getAllMessagesAsc(UUID conversationId, UUID currentUserId);
 
+    List<MessageDto> searchMessagesInConversation(UUID conversationId, UUID currentUserId, String keyword);
+
+    List<MessageDto> searchAllMyMessages(UUID currentUserId, String keyword);
+
     MessageDto saveMessage(UUID conversationId, UUID senderId, SendMessageRequest request);
 
     List<UserDto> searchUsers(String query, UUID currentUserId);

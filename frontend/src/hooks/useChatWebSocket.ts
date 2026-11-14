@@ -1,29 +1,29 @@
-import { useEffect, useRef } from 'react'
-import type { Message } from '../types/chat'
+import { useCallback, useEffect, useRef } from 'react'
+import type { Message, PresenceEvent, TypingEvent } from '../types/chat'
 
 export function useChatWebSocket(
   conversationId: string | null,
   token: string | null,
-  onNewMessage: (message: Message) => void
+  onNewMessage: (message: Message) => void,
+  onTypingEvent?: (event: TypingEvent) => void,
+  onPresenceEvent?: (event: PresenceEvent) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectedRef = useRef<boolean>(false)
 
   useEffect(() => {
-    if (!conversationId || !token) return
+    if (!token) return
 
     let socket: WebSocket | null = null
     let reconnectTimeout: any = null
 
     function connect() {
       try {
-        // Kết nối WebSocket thuần tới endpoint /ws của Spring Boot
         const wsUrl = `ws://localhost:8080/ws`
         socket = new WebSocket(wsUrl)
         wsRef.current = socket
 
         socket.onopen = () => {
-          // Gửi frame STOMP CONNECT kèm Bearer Token
           const connectFrame = [
             'CONNECT',
             'accept-version:1.2,1.1,1.0',
@@ -38,28 +38,61 @@ export function useChatWebSocket(
         socket.onmessage = (event) => {
           const raw = event.data as string
 
-          // Nếu nhận được CONNECTED từ Server -> Subscribe topic
+          // Khi nhận được CONNECTED từ Server -> Subscribe vào các kênh
           if (raw.startsWith('CONNECTED')) {
             isConnectedRef.current = true
-            const subFrame = [
+
+            // 1. Luôn subscribe kênh Presence toàn cục
+            const subPresenceFrame = [
               'SUBSCRIBE',
-              `id:sub-${conversationId}`,
-              `destination:/topic/chat/${conversationId}`,
+              'id:sub-presence',
+              'destination:/topic/presence',
               '\n',
             ].join('\n') + '\0'
-            socket?.send(subFrame)
+            socket?.send(subPresenceFrame)
+
+            // 2. Nếu có conversationId -> subscribe kênh chat và kênh typing
+            if (conversationId) {
+              const subChatFrame = [
+                'SUBSCRIBE',
+                `id:sub-${conversationId}`,
+                `destination:/topic/chat/${conversationId}`,
+                '\n',
+              ].join('\n') + '\0'
+              socket?.send(subChatFrame)
+
+              const subTypingFrame = [
+                'SUBSCRIBE',
+                `id:sub-typing-${conversationId}`,
+                `destination:/topic/chat/${conversationId}/typing`,
+                '\n',
+              ].join('\n') + '\0'
+              socket?.send(subTypingFrame)
+            }
             return
           }
 
-          // Nếu nhận được bản tin MESSAGE
+          // Khi nhận được bản tin MESSAGE từ STOMP
           if (raw.startsWith('MESSAGE')) {
             const bodyStart = raw.indexOf('\n\n')
             if (bodyStart !== -1) {
+              const headersPart = raw.substring(0, bodyStart)
               const body = raw.substring(bodyStart + 2).replace(/\0$/, '')
+
               try {
-                const messageObj = JSON.parse(body) as Message
-                if (messageObj && messageObj.id) {
-                  onNewMessage(messageObj)
+                const parsed = JSON.parse(body)
+                if (headersPart.includes('/topic/presence')) {
+                  if (onPresenceEvent && parsed && parsed.userId) {
+                    onPresenceEvent(parsed as PresenceEvent)
+                  }
+                } else if (headersPart.includes('/typing')) {
+                  if (onTypingEvent && parsed && parsed.conversationId) {
+                    onTypingEvent(parsed as TypingEvent)
+                  }
+                } else {
+                  if (parsed && parsed.id) {
+                    onNewMessage(parsed as Message)
+                  }
                 }
               } catch {
                 // Ignore parse error
@@ -74,9 +107,8 @@ export function useChatWebSocket(
 
         socket.onclose = () => {
           isConnectedRef.current = false
-          // Tự động kết nối lại sau 4s nếu còn cuộc trò chuyện
           reconnectTimeout = setTimeout(() => {
-            if (conversationId) connect()
+            if (token) connect()
           }, 4000)
         }
       } catch {
@@ -90,18 +122,44 @@ export function useChatWebSocket(
       if (reconnectTimeout) clearTimeout(reconnectTimeout)
       if (socket) {
         if (isConnectedRef.current && socket.readyState === WebSocket.OPEN) {
-          const unsubFrame = [
-            'UNSUBSCRIBE',
-            `id:sub-${conversationId}`,
-            '\n',
-          ].join('\n') + '\0'
-          socket.send(unsubFrame)
+          if (conversationId) {
+            const unsubChat = ['UNSUBSCRIBE', `id:sub-${conversationId}`, '\n'].join('\n') + '\0'
+            const unsubTyping = ['UNSUBSCRIBE', `id:sub-typing-${conversationId}`, '\n'].join('\n') + '\0'
+            socket.send(unsubChat)
+            socket.send(unsubTyping)
+          }
+          const unsubPresence = ['UNSUBSCRIBE', 'id:sub-presence', '\n'].join('\n') + '\0'
+          socket.send(unsubPresence)
         }
         socket.close()
       }
       wsRef.current = null
       isConnectedRef.current = false
     }
-  }, [conversationId, token])
-}
+  }, [conversationId, token, onNewMessage, onTypingEvent, onPresenceEvent])
 
+  const sendTypingSignal = useCallback(
+    (typing: boolean) => {
+      if (!conversationId || !wsRef.current || !isConnectedRef.current) return
+      if (wsRef.current.readyState !== WebSocket.OPEN) return
+
+      const payload = JSON.stringify({
+        conversationId,
+        typing,
+      })
+
+      const sendFrame = [
+        'SEND',
+        'destination:/app/chat.typing',
+        'content-type:application/json',
+        '\n',
+        payload,
+      ].join('\n') + '\0'
+
+      wsRef.current.send(sendFrame)
+    },
+    [conversationId]
+  )
+
+  return { sendTypingSignal }
+}
