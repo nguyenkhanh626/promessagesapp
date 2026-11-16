@@ -80,6 +80,7 @@ public class ConversationController {
     ) {
         User currentUser = getAuthenticatedUser(authentication);
         ConversationDto conversation = chatService.createGroupConversation(currentUser.getId(), request);
+        notifyGroupMembers(conversation);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Tạo nhóm trò chuyện thành công", conversation));
     }
@@ -92,6 +93,7 @@ public class ConversationController {
     ) {
         User currentUser = getAuthenticatedUser(authentication);
         ConversationDto updated = chatService.updateGroupConversation(conversationId, currentUser.getId(), request);
+        notifyGroupMembers(updated);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin nhóm thành công", updated));
     }
 
@@ -123,6 +125,7 @@ public class ConversationController {
     ) {
         User currentUser = getAuthenticatedUser(authentication);
         ConversationDto updated = chatService.addMembersToGroup(conversationId, currentUser.getId(), request);
+        notifyGroupMembers(updated);
         return ResponseEntity.ok(ApiResponse.success("Thêm thành viên vào nhóm thành công", updated));
     }
 
@@ -232,5 +235,27 @@ public class ConversationController {
         User currentUser = getAuthenticatedUser(authentication);
         List<UserDto> users = chatService.searchUsers(query, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(users));
+    }
+
+    private void notifyGroupMembers(ConversationDto conversation) {
+        if (conversation == null || conversation.getMembers() == null) {
+            return;
+        }
+        for (ConversationMemberDto member : conversation.getMembers()) {
+            if (member.getEmail() != null && !member.getEmail().isBlank()) {
+                messagingTemplate.convertAndSendToUser(
+                        member.getEmail(),
+                        "/queue/conversations",
+                        conversation
+                );
+            }
+            if (member.getUserId() != null) {
+                messagingTemplate.convertAndSendToUser(
+                        member.getUserId().toString(),
+                        "/queue/conversations",
+                        conversation
+                );
+            }
+        }
     }
 }

@@ -34,29 +34,32 @@ public class DataInitializer implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    @Transactional
     public void run(String... args) {
-        log.info("Checking and seeding default user accounts...");
+        try {
+            log.info("Checking and seeding default user accounts...");
 
-        User user1 = initUser(
-                "user1@gmail.com",
-                "Password123!",
-                "Hoàng Phúc Hưng",
-                "https://ui-avatars.com/api/?name=Hoàng+Phúc+Hưng&background=5B5FC7&color=fff&bold=true"
-        );
+            User user1 = initUser(
+                    "user1@gmail.com",
+                    "Password123!",
+                    "Hoàng Phúc Hưng",
+                    "https://ui-avatars.com/api/?name=Hoàng+Phúc+Hưng&background=5B5FC7&color=fff&bold=true"
+            );
 
-        User user2 = initUser(
-                "user2@gmail.com",
-                "Password123!",
-                "Nguyễn Thị B",
-                "https://ui-avatars.com/api/?name=Nguyễn+Thị+B&background=008080&color=fff&bold=true"
-        );
+            User user2 = initUser(
+                    "user2@gmail.com",
+                    "Password123!",
+                    "Nguyễn Thị B",
+                    "https://ui-avatars.com/api/?name=Nguyễn+Thị+B&background=008080&color=fff&bold=true"
+            );
 
-        if (user1 != null && user2 != null) {
-            initSampleConversation(user1, user2);
+            if (user1 != null && user2 != null) {
+                initSampleConversation(user1, user2);
+            }
+
+            log.info("Default user accounts initialization completed.");
+        } catch (Exception ex) {
+            log.warn("Bỏ qua khởi tạo dữ liệu mẫu do cơ sở dữ liệu chưa sẵn sàng: {}", ex.getMessage());
         }
-
-        log.info("Default user accounts initialization completed.");
     }
 
     private User initUser(String email, String rawPassword, String displayName, String avatarUrl) {

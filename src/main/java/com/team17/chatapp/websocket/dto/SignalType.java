@@ -31,5 +31,7 @@ public enum SignalType {
     JOIN_ROOM,          // Thành viên vào phòng họp
     LEAVE_ROOM,         // Thành viên rời phòng họp
     USER_JOINED,        // Server broadcast thông báo có người mới vào
-    USER_LEFT           // Server broadcast thông báo có người rời phòng
+    USER_LEFT,          // Server broadcast thông báo có người rời phòng
+    ROOM_FULL,          // Phòng họp đã đạt giới hạn tối đa (5 người)
+    ROOM_STATE          // Đồng bộ trạng thái phòng họp
 }

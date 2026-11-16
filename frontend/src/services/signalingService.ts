@@ -8,7 +8,8 @@ class SignalingService {
   private token: string | null = null
   private listeners: Set<SignalListener> = new Set()
   private reconnectTimer: any = null
-  private queuedMessages: SignalMessage[] = []
+  private queuedFrames: Array<{ destination: string; signal: SignalMessage }> = []
+  private subscribedRoomId: string | null = null
 
   public connect(token: string) {
     if (this.socket && this.token === token && this.isConnected) {
@@ -38,10 +39,16 @@ class SignalingService {
           const subFrame = `SUBSCRIBE\nid:sub-user-signals\ndestination:/user/queue/signals\n\n\0`
           this.socket?.send(subFrame)
 
+          // Nếu đang trong phòng họp nhóm, tự động re-subscribe kênh phòng
+          if (this.subscribedRoomId) {
+            const roomSubFrame = `SUBSCRIBE\nid:sub-room-${this.subscribedRoomId}\ndestination:/topic/call/room/${this.subscribedRoomId}\n\n\0`
+            this.socket?.send(roomSubFrame)
+          }
+
           // Gửi các bản tin còn lưu trong hàng đợi tạm
-          while (this.queuedMessages.length > 0) {
-            const pending = this.queuedMessages.shift()
-            if (pending) this.sendSignal(pending)
+          while (this.queuedFrames.length > 0) {
+            const pending = this.queuedFrames.shift()
+            if (pending) this.sendToDestination(pending.destination, pending.signal)
           }
           return
         }
@@ -93,17 +100,67 @@ class SignalingService {
   }
 
   public sendSignal(signal: SignalMessage) {
+    this.sendToDestination('/app/call/signal', signal)
+  }
+
+  public sendRoomSignal(signal: SignalMessage) {
+    this.sendToDestination('/app/call/room-signal', signal)
+  }
+
+  public subscribeToRoom(roomId: string) {
+    if (this.subscribedRoomId && this.subscribedRoomId !== roomId) {
+      this.unsubscribeFromRoom(this.subscribedRoomId)
+    }
+    this.subscribedRoomId = roomId
+
+    if (this.socket && this.isConnected && this.socket.readyState === WebSocket.OPEN) {
+      const roomSubFrame = `SUBSCRIBE\nid:sub-room-${roomId}\ndestination:/topic/call/room/${roomId}\n\n\0`
+      this.socket.send(roomSubFrame)
+      console.log('📡 [Signaling WebSocket] Đã subscribe phòng họp:', roomId)
+    }
+  }
+
+  public unsubscribeFromRoom(roomId: string) {
+    if (this.subscribedRoomId === roomId) {
+      this.subscribedRoomId = null
+    }
+    if (this.socket && this.isConnected && this.socket.readyState === WebSocket.OPEN) {
+      const unsubFrame = `UNSUBSCRIBE\nid:sub-room-${roomId}\n\n\0`
+      this.socket.send(unsubFrame)
+      console.log('🔌 [Signaling WebSocket] Đã unsubscribe phòng họp:', roomId)
+    }
+  }
+
+  public joinRoom(roomId: string, senderId: string, senderName?: string) {
+    this.subscribeToRoom(roomId)
+    this.sendToDestination('/app/call/join', {
+      type: 'JOIN_ROOM',
+      senderId,
+      senderName,
+      roomId,
+    })
+  }
+
+  public leaveRoom(roomId: string, senderId: string) {
+    this.sendToDestination('/app/call/leave', {
+      type: 'LEAVE_ROOM',
+      senderId,
+      roomId,
+    })
+    this.unsubscribeFromRoom(roomId)
+  }
+
+  private sendToDestination(destination: string, signal: SignalMessage) {
     if (!this.socket || !this.isConnected || this.socket.readyState !== WebSocket.OPEN) {
       console.warn('⚠️ WebSocket chưa sẵn sàng, lưu tạm signal vào hàng đợi:', signal.type)
-      this.queuedMessages.push(signal)
+      this.queuedFrames.push({ destination, signal })
       return
     }
 
     const body = JSON.stringify(signal)
-    // Định dạng frame SEND chuẩn STOMP 1.2: header kết thúc bằng \n\n, theo sau là body và kết thúc bằng null octet (\0)
-    const sendFrame = `SEND\ndestination:/app/call/signal\ncontent-type:application/json\n\n${body}\0`
+    const sendFrame = `SEND\ndestination:${destination}\ncontent-type:application/json\n\n${body}\0`
 
-    console.log('🚀 [Signaling WebSocket] Gửi Signal:', signal.type, 'tới', signal.receiverId)
+    console.log('🚀 [Signaling WebSocket] Gửi Signal:', signal.type, 'tới', destination, signal.receiverId || signal.roomId || '')
     this.socket.send(sendFrame)
   }
 

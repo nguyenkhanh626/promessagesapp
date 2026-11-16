@@ -1,17 +1,20 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
-import type { CallStatus, CallUserInfo, SignalMessage } from '../types/calling'
+import type { CallMode, CallStatus, CallUserInfo, GroupParticipant, SignalMessage } from '../types/calling'
 import { signalingService } from '../services/signalingService'
 import { webrtcManager } from '../services/webrtcManager'
+import { meshWebrtcManager } from '../services/meshWebrtcManager'
 import { callSounds } from '../utils/callSounds'
 import { useMediaStream } from '../hooks/useMediaStream'
 import { useAuth } from './AuthContext'
 
 interface CallContextType {
   callStatus: CallStatus
+  callMode: CallMode
   callType: 'AUDIO' | 'VIDEO'
   currentRoomId: string | null
   caller: CallUserInfo | null
   targetUser: CallUserInfo | null
+  participants: GroupParticipant[]
   duration: number
   isMuted: boolean
   isVideoEnabled: boolean
@@ -24,6 +27,7 @@ interface CallContextType {
   isMinimized: boolean
   errorMessage: string | null
   startCall: (target: CallUserInfo, type?: 'AUDIO' | 'VIDEO') => Promise<void>
+  joinGroupCall: (roomId: string, groupName: string, type?: 'AUDIO' | 'VIDEO') => Promise<void>
   acceptCall: () => Promise<void>
   rejectCall: () => void
   cancelCall: () => void
@@ -41,10 +45,12 @@ const CallContext = createContext<CallContextType | null>(null)
 export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, token } = useAuth()
   const [callStatus, setCallStatus] = useState<CallStatus>('IDLE')
+  const [callMode, setCallMode] = useState<CallMode>('DIRECT')
   const [currentCallType, setCurrentCallType] = useState<'AUDIO' | 'VIDEO'>('AUDIO')
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null)
   const [caller, setCaller] = useState<CallUserInfo | null>(null)
   const [targetUser, setTargetUser] = useState<CallUserInfo | null>(null)
+  const [participants, setParticipants] = useState<GroupParticipant[]>([])
   const [duration, setDuration] = useState<number>(0)
   const [isMinimized, setIsMinimized] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -53,6 +59,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new')
 
+  const callModeRef = useRef<CallMode>('DIRECT')
+  const groupLocalStreamRef = useRef<MediaStream | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const durationTimerRef = useRef<any>(null)
   const timeoutTimerRef = useRef<any>(null)
@@ -96,6 +104,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     callSounds.stopAll()
     stopStream()
     webrtcManager.close()
+    meshWebrtcManager.closeAll()
+    groupLocalStreamRef.current = null
+    callModeRef.current = 'DIRECT'
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current)
       durationTimerRef.current = null
@@ -108,10 +119,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       remoteAudioRef.current.srcObject = null
     }
     setCallStatus('IDLE')
+    setCallMode('DIRECT')
     setCurrentCallType('AUDIO')
     setCurrentRoomId(null)
     setCaller(null)
     setTargetUser(null)
+    setParticipants([])
     setDuration(0)
     setIsMinimized(false)
     setIsRemoteCameraOff(false)
@@ -119,6 +132,33 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRemoteStream(null)
     setIceConnectionState('new')
   }, [stopStream])
+
+  const initMeshPeerConnection = useCallback(
+    (peerId: string, roomId: string) => {
+      meshWebrtcManager.initPeer(peerId, groupLocalStreamRef.current, {
+        onRemoteStream: (id, rStream) => {
+          setParticipants((prev) =>
+            prev.map((p) => (p.userId === id ? { ...p, stream: rStream } : p))
+          )
+        },
+        onIceCandidate: (id, candidate) => {
+          signalingService.sendSignal({
+            type: 'ICE_CANDIDATE',
+            senderId: user?.id || 'me',
+            receiverId: id,
+            roomId,
+            payload: candidate.toJSON(),
+          })
+        },
+        onIceStateChange: (id, state) => {
+          setParticipants((prev) =>
+            prev.map((p) => (p.userId === id ? { ...p, iceState: state } : p))
+          )
+        },
+      })
+    },
+    [user?.id]
+  )
 
   // Bộ đếm thời gian đàm thoại
   useEffect(() => {
@@ -191,6 +231,40 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         case 'CALL_OFFER': {
+          if (callModeRef.current === 'GROUP') {
+            const roomId = currentRoomId || msg.roomId || ''
+            try {
+              setParticipants((prev) => {
+                if (prev.some((p) => p.userId === msg.senderId)) return prev
+                return [
+                  ...prev,
+                  {
+                    userId: msg.senderId,
+                    displayName: msg.senderName || 'Thành viên',
+                    stream: null,
+                    isMuted: false,
+                    isCameraOff: false,
+                  },
+                ]
+              })
+              initMeshPeerConnection(msg.senderId, roomId)
+              const answer = await meshWebrtcManager.handleOffer(msg.senderId, msg.payload)
+              if (answer) {
+                signalingService.sendSignal({
+                  type: 'CALL_ANSWER',
+                  senderId: user?.id || 'me',
+                  senderName: user?.displayName,
+                  receiverId: msg.senderId,
+                  roomId,
+                  payload: answer,
+                })
+              }
+            } catch (err) {
+              console.error('Lỗi khi xử lý Mesh Offer:', err)
+            }
+            break
+          }
+
           callSounds.stopAll()
           setCallStatus('CONNECTING')
 
@@ -213,6 +287,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         case 'CALL_ANSWER': {
+          if (callModeRef.current === 'GROUP') {
+            try {
+              await meshWebrtcManager.handleAnswer(msg.senderId, msg.payload)
+            } catch (err) {
+              console.error('Lỗi khi nhận Mesh Answer:', err)
+            }
+            break
+          }
+
           try {
             await webrtcManager.handleAnswer(msg.payload)
             setCallStatus('CONNECTED')
@@ -224,22 +307,130 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         case 'ICE_CANDIDATE': {
           if (msg.payload) {
-            await webrtcManager.addIceCandidate(msg.payload)
+            if (callModeRef.current === 'GROUP') {
+              await meshWebrtcManager.addIceCandidate(msg.senderId, msg.payload)
+            } else {
+              await webrtcManager.addIceCandidate(msg.payload)
+            }
           }
           break
         }
 
         case 'CAMERA_TOGGLE': {
           if (msg.payload && typeof msg.payload.enabled === 'boolean') {
-            setIsRemoteCameraOff(!msg.payload.enabled)
+            if (callModeRef.current === 'GROUP') {
+              if (msg.senderId !== user?.id) {
+                setParticipants((prev) =>
+                  prev.map((p) =>
+                    p.userId === msg.senderId ? { ...p, isCameraOff: !msg.payload.enabled } : p
+                  )
+                )
+              }
+            } else {
+              setIsRemoteCameraOff(!msg.payload.enabled)
+            }
           }
           break
         }
 
         case 'MIC_TOGGLE': {
           if (msg.payload && typeof msg.payload.enabled === 'boolean') {
-            setIsRemoteMuted(!msg.payload.enabled)
+            if (callModeRef.current === 'GROUP') {
+              if (msg.senderId !== user?.id) {
+                setParticipants((prev) =>
+                  prev.map((p) =>
+                    p.userId === msg.senderId ? { ...p, isMuted: !msg.payload.enabled } : p
+                  )
+                )
+              }
+            } else {
+              setIsRemoteMuted(!msg.payload.enabled)
+            }
           }
+          break
+        }
+
+        case 'JOIN_ROOM': {
+          if (callModeRef.current !== 'GROUP') break
+          const roomId = msg.roomId || currentRoomId || ''
+          const existingList: Array<{ userId: string; displayName?: string; avatarUrl?: string }> =
+            msg.payload?.participants || []
+
+          const initialParticipants: GroupParticipant[] = existingList
+            .filter((p) => p.userId !== user?.id && p.userId !== user?.email)
+            .map((p) => ({
+              userId: p.userId,
+              displayName: p.displayName || p.userId,
+              avatarUrl: p.avatarUrl,
+              stream: null,
+              isMuted: false,
+              isCameraOff: false,
+            }))
+
+          setParticipants(initialParticipants)
+          setCallStatus('CONNECTED')
+
+          // Người mới vào chủ động tạo Offer gửi tới từng thành viên đã có mặt trong phòng
+          for (const peer of initialParticipants) {
+            try {
+              initMeshPeerConnection(peer.userId, roomId)
+              const offer = await meshWebrtcManager.createOffer(peer.userId)
+              if (offer) {
+                signalingService.sendSignal({
+                  type: 'CALL_OFFER',
+                  senderId: user?.id || 'me',
+                  receiverId: peer.userId,
+                  roomId,
+                  callType: currentCallType,
+                  payload: offer,
+                })
+              }
+            } catch (err) {
+              console.error(`Lỗi tạo Mesh Offer tới '${peer.userId}':`, err)
+            }
+          }
+          break
+        }
+
+        case 'USER_JOINED': {
+          if (callModeRef.current !== 'GROUP') break
+          const joinedId = msg.payload?.joinedUserId || msg.senderId
+          if (!joinedId || joinedId === user?.id || joinedId === user?.email) break
+
+          const profile = msg.payload?.participant
+          setParticipants((prev) => {
+            if (prev.some((p) => p.userId === joinedId)) return prev
+            return [
+              ...prev,
+              {
+                userId: joinedId,
+                displayName: profile?.displayName || msg.senderName || joinedId,
+                avatarUrl: profile?.avatarUrl,
+                stream: null,
+                isMuted: false,
+                isCameraOff: false,
+              },
+            ]
+          })
+          break
+        }
+
+        case 'USER_LEFT': {
+          if (callModeRef.current !== 'GROUP') break
+          const leftId = msg.payload?.leftUserId || msg.senderId
+          if (!leftId) break
+          meshWebrtcManager.removePeer(leftId)
+          setParticipants((prev) => prev.filter((p) => p.userId !== leftId))
+          break
+        }
+
+        case 'ROOM_FULL': {
+          const reason = msg.payload?.reason || 'Phòng họp đã đạt giới hạn tối đa 5 thành viên.'
+          setErrorMessage(reason)
+          if (currentRoomId) {
+            signalingService.unsubscribeFromRoom(currentRoomId)
+          }
+          cleanupCallState()
           break
         }
 
@@ -285,7 +476,33 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribe()
     }
-  }, [callStatus, user, targetUser, caller, currentRoomId, cleanupCallState])
+  }, [callStatus, user, targetUser, caller, currentRoomId, currentCallType, initMeshPeerConnection, cleanupCallState])
+
+  // Tham gia cuộc gọi nhóm (Mesh WebRTC 3-5 người)
+  const joinGroupCall = async (
+    roomId: string,
+    groupName: string,
+    type: 'AUDIO' | 'VIDEO' = 'VIDEO'
+  ) => {
+    if (callStatus !== 'IDLE') return
+
+    setErrorMessage(null)
+    const stream = type === 'VIDEO' ? await getVideoStream() : await getAudioStream()
+    if (!stream) return
+
+    callModeRef.current = 'GROUP'
+    groupLocalStreamRef.current = stream
+    meshWebrtcManager.setLocalStream(stream)
+
+    setCallMode('GROUP')
+    setCurrentRoomId(roomId)
+    setCurrentCallType(type)
+    setTargetUser({ id: roomId, displayName: groupName })
+    setParticipants([])
+    setCallStatus('CONNECTING')
+
+    signalingService.joinRoom(roomId, user?.id || 'me', user?.displayName || 'Người dùng')
+  }
 
   // Khởi tạo cuộc gọi đi (Outgoing Call)
   const startCall = async (target: CallUserInfo, type: 'AUDIO' | 'VIDEO' = 'AUDIO') => {
@@ -419,8 +636,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cleanupCallState()
   }
 
-  // Kết thúc cuộc gọi đang đàm thoại (End Call)
+  // Kết thúc cuộc gọi đang đàm thoại (End Call / Leave Group)
   const endCall = () => {
+    if (callModeRef.current === 'GROUP') {
+      if (currentRoomId) {
+        signalingService.leaveRoom(currentRoomId, user?.id || 'me')
+      }
+      callSounds.playEndTone()
+      cleanupCallState()
+      return
+    }
+
     const peerId = targetUser?.id || caller?.id
     if (peerId && currentRoomId) {
       signalingService.sendSignal({
@@ -436,6 +662,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const toggleMute = () => {
     const isNowEnabled = toggleLocalMute()
+    if (callModeRef.current === 'GROUP' && currentRoomId) {
+      signalingService.sendRoomSignal({
+        type: 'MIC_TOGGLE',
+        senderId: user?.id || 'me',
+        roomId: currentRoomId,
+        payload: { enabled: isNowEnabled },
+      })
+      return
+    }
+
     const otherUser = targetUser || caller
     if (otherUser && currentRoomId) {
       signalingService.sendSignal({
@@ -450,6 +686,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const toggleVideo = () => {
     const isNowEnabled = toggleLocalVideo()
+    if (callModeRef.current === 'GROUP' && currentRoomId) {
+      signalingService.sendRoomSignal({
+        type: 'CAMERA_TOGGLE',
+        senderId: user?.id || 'me',
+        roomId: currentRoomId,
+        payload: { enabled: isNowEnabled },
+      })
+      return
+    }
+
     const otherUser = targetUser || caller
     if (otherUser && currentRoomId) {
       signalingService.sendSignal({
@@ -465,7 +711,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSwitchCamera = async (deviceId: string): Promise<MediaStreamTrack | null> => {
     const track = await switchCameraDevice(deviceId)
     if (track) {
-      await webrtcManager.replaceVideoTrack(track)
+      if (callModeRef.current === 'GROUP') {
+        await meshWebrtcManager.replaceTrackForAllPeers('video', track)
+      } else {
+        await webrtcManager.replaceVideoTrack(track)
+      }
     }
     return track
   }
@@ -473,7 +723,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSwitchMicrophone = async (deviceId: string): Promise<MediaStreamTrack | null> => {
     const track = await switchMicrophoneDevice(deviceId)
     if (track) {
-      await webrtcManager.replaceAudioTrack(track)
+      if (callModeRef.current === 'GROUP') {
+        await meshWebrtcManager.replaceTrackForAllPeers('audio', track)
+      } else {
+        await webrtcManager.replaceAudioTrack(track)
+      }
     }
     return track
   }
@@ -490,10 +744,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <CallContext.Provider
       value={{
         callStatus,
+        callMode,
         callType: currentCallType,
         currentRoomId,
         caller,
         targetUser,
+        participants,
         duration,
         isMuted,
         isVideoEnabled,
@@ -506,6 +762,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isMinimized,
         errorMessage: errorMessage || permissionError,
         startCall,
+        joinGroupCall,
         acceptCall,
         rejectCall,
         cancelCall,

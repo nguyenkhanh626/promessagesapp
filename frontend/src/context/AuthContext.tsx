@@ -44,6 +44,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyAuth()
   }, [])
 
+  // Đồng bộ phiên đăng nhập giữa nhiều tab trên cùng trình duyệt
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.storageArea !== localStorage) return
+
+      // Trường hợp xóa toàn bộ localStorage hoặc xóa token (Logout ở tab khác)
+      if (event.key === null || (event.key === 'token' && !event.newValue)) {
+        setToken(null)
+        setUser(null)
+        return
+      }
+
+      // Trường hợp đổi sang token mới (Đăng nhập tài khoản khác ở tab khác)
+      if (event.key === 'token' && event.newValue && event.newValue !== event.oldValue) {
+        setToken(event.newValue)
+        const savedUser = localStorage.getItem('user')
+        if (savedUser) {
+          try {
+            setUser(JSON.parse(savedUser))
+          } catch {
+            setUser(null)
+          }
+        }
+        // Reload để đóng WebSocket/WebRTC cũ và nạp lại toàn bộ dữ liệu đúng theo tài khoản mới
+        window.location.reload()
+      }
+
+      // Cập nhật thông tin user nếu thay đổi ở tab khác
+      if (event.key === 'user') {
+        if (!event.newValue) {
+          setUser(null)
+        } else {
+          try {
+            setUser(JSON.parse(event.newValue))
+          } catch {
+            setUser(null)
+          }
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
+
   const handleLogin = async (payload: LoginPayload) => {
     const authData = await authService.login(payload)
     localStorage.setItem('token', authData.token)

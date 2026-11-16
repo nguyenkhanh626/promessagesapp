@@ -178,4 +178,86 @@ class SignalingControllerTest {
 
         verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(toggleMsg));
     }
+
+    @Test
+    @DisplayName("Tham gia phòng nhóm -> Gửi JOIN_ROOM cho user và broadcast USER_JOINED tới room")
+    void handleJoinRoom_Success() {
+        SignalMessage joinMsg = SignalMessage.builder()
+                .type(SignalType.JOIN_ROOM)
+                .roomId("group-room-1")
+                .senderName("User A")
+                .build();
+
+        when(sessionRegistry.getRoomParticipants("group-room-1")).thenReturn(java.util.Set.of("user-existing"));
+        when(sessionRegistry.isRoomFull("group-room-1")).thenReturn(false);
+
+        signalingController.handleJoinRoom(joinMsg, principal);
+
+        verify(sessionRegistry).joinRoom("group-room-1", "user-sender");
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("user-sender"),
+                eq("/queue/signals"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.JOIN_ROOM)
+        );
+        verify(messagingTemplate).convertAndSend(
+                eq("/topic/call/room/group-room-1"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.USER_JOINED)
+        );
+    }
+
+    @Test
+    @DisplayName("Tham gia phòng đã đủ 5 người -> Trả về ROOM_FULL và không gọi joinRoom")
+    void handleJoinRoom_RoomFull() {
+        SignalMessage joinMsg = SignalMessage.builder()
+                .type(SignalType.JOIN_ROOM)
+                .roomId("group-room-full")
+                .build();
+
+        when(sessionRegistry.getRoomParticipants("group-room-full"))
+                .thenReturn(java.util.Set.of("u1", "u2", "u3", "u4", "u5"));
+        when(sessionRegistry.isRoomFull("group-room-full")).thenReturn(true);
+
+        signalingController.handleJoinRoom(joinMsg, principal);
+
+        verify(sessionRegistry, org.mockito.Mockito.never()).joinRoom(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("user-sender"),
+                eq("/queue/signals"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.ROOM_FULL)
+        );
+    }
+
+    @Test
+    @DisplayName("Rời phòng họp nhóm -> Xóa khỏi registry và broadcast USER_LEFT")
+    void handleLeaveRoom_Success() {
+        SignalMessage leaveMsg = SignalMessage.builder()
+                .type(SignalType.LEAVE_ROOM)
+                .roomId("group-room-1")
+                .build();
+
+        signalingController.handleLeaveRoom(leaveMsg, principal);
+
+        verify(sessionRegistry).leaveRoom("group-room-1", "user-sender");
+        verify(messagingTemplate).convertAndSend(
+                eq("/topic/call/room/group-room-1"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.USER_LEFT)
+        );
+    }
+
+    @Test
+    @DisplayName("Gửi tín hiệu Mic/Cam trong phòng nhóm -> Broadcast tới /topic/call/room/{roomId}")
+    void handleRoomMediaSignal_BroadcastsToRoom() {
+        SignalMessage micMsg = SignalMessage.builder()
+                .type(SignalType.MIC_TOGGLE)
+                .roomId("group-room-1")
+                .payload(java.util.Map.of("enabled", false))
+                .build();
+
+        signalingController.handleRoomMediaSignal(micMsg, principal);
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/call/room/group-room-1"), eq(micMsg));
+    }
 }

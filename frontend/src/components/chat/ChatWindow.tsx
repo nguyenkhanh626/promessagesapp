@@ -17,6 +17,7 @@ import {
 import type { Conversation, Message, TypingEvent, UserPresenceStatus } from '../../types/chat'
 import type { User } from '../../types/auth'
 import { useCall } from '../../context/CallContext'
+import { apiClient } from '../../services/apiClient'
 import { chatService } from '../../services/chatService'
 import { STATUS_CONFIG } from './UserDirectoryModal'
 
@@ -54,13 +55,50 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [searchedMessages, setSearchedMessages] = useState<Message[]>([])
   const [isSearchingMessages, setIsSearchingMessages] = useState(false)
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+  const [activeRoomCount, setActiveRoomCount] = useState<number>(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const typingTimeoutRef = useRef<any>(null)
   const isTypingSentRef = useRef<boolean>(false)
-  const { startCall, callStatus } = useCall()
+  const { startCall, joinGroupCall, callStatus } = useCall()
+
+  // Kiểm tra phòng họp nhóm có đang diễn ra không
+  useEffect(() => {
+    if (!conversation || conversation.type !== 'GROUP') {
+      setActiveRoomCount(0)
+      return
+    }
+
+    let isCancelled = false
+    const checkRoom = async () => {
+      try {
+        const res = await apiClient.get<{ data: string[] }>(`/call/rooms/${conversation.id}/participants`)
+        if (!isCancelled && Array.isArray(res.data?.data)) {
+          setActiveRoomCount(res.data.data.length)
+        }
+      } catch {
+        // Bỏ qua lỗi mạng tạm thời
+      }
+    }
+
+    checkRoom()
+    const interval = setInterval(checkRoom, 10000)
+    return () => {
+      isCancelled = true
+      clearInterval(interval)
+    }
+  }, [conversation?.id, conversation?.type])
+
+  // Tắt ngay banner phòng họp khi nhận được thông báo cuộc gọi đã kết thúc
+  useEffect(() => {
+    if (messages.length === 0) return
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg.messageType === 'SYSTEM' && lastMsg.content?.includes('Cuộc gọi nhóm đã kết thúc')) {
+      setActiveRoomCount(0)
+    }
+  }, [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -188,8 +226,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   }
 
+  const triggerGroupCall = async (type: 'AUDIO' | 'VIDEO', sendInviteCard: boolean) => {
+    if (!conversation || callStatus !== 'IDLE') return
+    try {
+      if (sendInviteCard && activeRoomCount === 0) {
+        await chatService.sendMessage(conversation.id, {
+          content: `GROUP_CALL_INVITE:${type}`,
+          messageType: 'TEXT',
+        })
+      }
+      await chatService.sendMessage(conversation.id, {
+        content: `${currentUser?.displayName || 'Thành viên'} đã tham gia cuộc gọi ${
+          type === 'VIDEO' ? 'video' : 'thoại'
+        }.`,
+        messageType: 'SYSTEM',
+      })
+    } catch {
+      // Không chặn luồng gọi nếu gửi log chat lỗi tạm thời
+    }
+    joinGroupCall(conversation.id, conversation.name || 'Cuộc họp nhóm', type)
+  }
+
   const handleStartVoiceCall = () => {
     if (!conversation) return
+    if (conversation.type === 'GROUP') {
+      triggerGroupCall('AUDIO', true)
+      return
+    }
     const otherId = conversation.otherUser?.id
     if (!otherId) return
 
@@ -197,7 +260,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       id: otherId,
       displayName: conversation.otherUser?.displayName || conversation.name || 'Người dùng',
       avatarUrl: conversation.otherUser?.avatarUrl || conversation.avatarUrl,
-    })
+    }, 'AUDIO')
+  }
+
+  const handleStartVideoCall = () => {
+    if (!conversation) return
+    if (conversation.type === 'GROUP') {
+      triggerGroupCall('VIDEO', true)
+      return
+    }
+    const otherId = conversation.otherUser?.id
+    if (!otherId) return
+
+    startCall({
+      id: otherId,
+      displayName: conversation.otherUser?.displayName || conversation.name || 'Người dùng',
+      avatarUrl: conversation.otherUser?.avatarUrl || conversation.avatarUrl,
+    }, 'VIDEO')
   }
 
   const formatMessageTime = (dateStr: string) => {
@@ -316,26 +395,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </button>
           )}
 
-          {!isGroup && (
-            <>
-              <button
-                type="button"
-                onClick={handleStartVoiceCall}
-                disabled={callStatus !== 'IDLE' || !conversation.otherUser}
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors disabled:opacity-40"
-                title="Bắt đầu cuộc gọi thoại (WebRTC Audio)"
-              >
-                <Phone size={18} />
-              </button>
-              <button
-                type="button"
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors"
-                title="Bắt đầu cuộc gọi video (WebRTC Video)"
-              >
-                <Video size={18} />
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={handleStartVoiceCall}
+            disabled={callStatus !== 'IDLE' || (!isGroup && !conversation.otherUser)}
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors disabled:opacity-40"
+            title={isGroup ? 'Gọi thoại nhóm (Mesh Audio)' : 'Bắt đầu cuộc gọi thoại (WebRTC Audio)'}
+          >
+            <Phone size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={handleStartVideoCall}
+            disabled={callStatus !== 'IDLE' || (!isGroup && !conversation.otherUser)}
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors disabled:opacity-40"
+            title={isGroup ? 'Họp video nhóm (Mesh Video Call)' : 'Bắt đầu cuộc gọi video (WebRTC Video)'}
+          >
+            <Video size={18} />
+          </button>
 
           <div className="h-5 w-[1px] bg-[#383838] mx-1" />
           <button
@@ -347,6 +424,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </button>
         </div>
       </header>
+
+      {/* Banner thông báo phòng họp nhóm đang diễn ra */}
+      {isGroup && activeRoomCount > 0 && callStatus === 'IDLE' && (
+        <div className="px-6 py-2.5 bg-emerald-950/60 border-b border-emerald-500/30 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm text-emerald-200">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>
+              Cuộc họp video nhóm đang diễn ra (<strong>{activeRoomCount}</strong> thành viên đang trong phòng)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => triggerGroupCall('VIDEO', false)}
+            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-sm shrink-0"
+          >
+            Tham gia ngay
+          </button>
+        </div>
+      )}
 
       {/* Thanh tìm kiếm tin nhắn trong hội thoại */}
       {showMessageSearch && (
@@ -416,16 +512,88 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <p>Hãy gửi lời chào đầu tiên hoặc chia sẻ hình ảnh, tài liệu vào cuộc trò chuyện!</p>
           </div>
         ) : (
-          messages.map((msg) => {
-            if (msg.messageType === 'SYSTEM') {
-              return (
-                <div key={msg.id} className="flex justify-center my-2">
-                  <span className="px-3 py-1 rounded-full bg-[#262626] border border-[#363636] text-[11px] text-gray-400">
-                    {msg.content}
-                  </span>
-                </div>
-              )
-            }
+          (() => {
+            const lastEndedCallIndex = messages.reduce((lastIdx, m, i) => {
+              if (m.messageType === 'SYSTEM' && m.content?.includes('Cuộc gọi nhóm đã kết thúc')) {
+                return i
+              }
+              return lastIdx
+            }, -1)
+
+            return messages.map((msg, msgIndex) => {
+              if (msg.messageType === 'SYSTEM') {
+                return (
+                  <div key={msg.id} className="flex justify-center my-2">
+                    <span className="px-3 py-1 rounded-full bg-[#262626] border border-[#363636] text-[11px] text-gray-400">
+                      {msg.content}
+                    </span>
+                  </div>
+                )
+              }
+
+              if (msg.content && msg.content.startsWith('GROUP_CALL_INVITE:')) {
+                const inviteCallType: 'AUDIO' | 'VIDEO' = msg.content.endsWith('AUDIO') ? 'AUDIO' : 'VIDEO'
+                const isMeCall = msg.senderId === currentUser?.id
+                const isCallEnded = msgIndex < lastEndedCallIndex
+                return (
+                  <div
+                    id={`msg-${msg.id}`}
+                    key={msg.id}
+                    className={`flex flex-col ${isMeCall ? 'items-end' : 'items-start'} my-1.5`}
+                  >
+                    {!isMeCall && (
+                      <span className="text-[11px] text-gray-400 ml-10 mb-1">
+                        {msg.senderName}
+                      </span>
+                    )}
+                    <div className="flex items-end gap-2.5">
+                      {!isMeCall && (
+                        <div className="h-7 w-7 rounded-full overflow-hidden bg-[#5B5FC7] shrink-0">
+                          {msg.senderAvatarUrl ? (
+                            <img src={msg.senderAvatarUrl} alt={msg.senderName} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-xs font-bold text-white">
+                              {(msg.senderName || 'U').charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => triggerGroupCall(inviteCallType, false)}
+                        disabled={isCallEnded || callStatus !== 'IDLE'}
+                        className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl border shadow-md transition-all text-left group ${
+                          isCallEnded
+                            ? 'bg-[#232327] border-white/5 opacity-75 cursor-default'
+                            : 'bg-[#2a2a30] hover:bg-[#35353d] border-white/10 disabled:opacity-60 disabled:cursor-default'
+                        }`}
+                      >
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm shrink-0 transition-transform ${
+                            isCallEnded
+                              ? 'bg-[#3f3f46] text-gray-300'
+                              : 'bg-emerald-500 text-white group-hover:scale-105'
+                          }`}
+                        >
+                          {inviteCallType === 'VIDEO' ? <Video size={20} /> : <Phone size={20} />}
+                        </div>
+                        <div className="pr-2">
+                          <p className={`text-sm font-semibold ${isCallEnded ? 'text-gray-300' : 'text-white'}`}>
+                            {inviteCallType === 'VIDEO' ? 'Cuộc gọi video nhóm' : 'Cuộc gọi thoại nhóm'}
+                          </p>
+                          <p className={`text-xs mt-0.5 ${isCallEnded ? 'text-gray-400' : 'text-gray-300'}`}>
+                            {isCallEnded
+                              ? 'Cuộc gọi đã kết thúc'
+                              : callStatus !== 'IDLE'
+                                ? 'Đang trong cuộc gọi'
+                                : 'Nhấn để tham gia'}
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
 
             const isMe = msg.senderId === currentUser?.id
             const isImage = msg.messageType === 'IMAGE' && msg.fileUrl
@@ -532,6 +700,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             )
           })
+          })()
         )}
         <div ref={messagesEndRef} />
       </div>

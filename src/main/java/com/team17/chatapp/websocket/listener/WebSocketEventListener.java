@@ -1,10 +1,15 @@
 package com.team17.chatapp.websocket.listener;
 
+import com.team17.chatapp.calling.service.GroupCallLifecycleService;
 import com.team17.chatapp.chat.service.PresenceService;
+import com.team17.chatapp.websocket.dto.SignalMessage;
+import com.team17.chatapp.websocket.dto.SignalType;
 import com.team17.chatapp.websocket.service.UserSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
@@ -12,6 +17,10 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.security.Principal;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Lắng nghe và xử lý các sự kiện vòng đời kết nối WebSocket STOMP
@@ -24,6 +33,10 @@ public class WebSocketEventListener {
 
     private final UserSessionRegistry sessionRegistry;
     private final PresenceService presenceService;
+    private final SimpMessagingTemplate messagingTemplate;
+
+    @Autowired(required = false)
+    private GroupCallLifecycleService groupCallLifecycleService;
 
     /**
      * Sự kiện khi Client thiết lập kết nối STOMP thành công
@@ -51,9 +64,29 @@ public class WebSocketEventListener {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
         String sessionId = headerAccessor.getSessionId();
 
+        String mappedUserId = sessionRegistry.getUserId(sessionId);
+        Set<String> activeRooms = (mappedUserId != null)
+                ? sessionRegistry.getRoomsByUser(mappedUserId)
+                : Collections.emptySet();
+
         String userId = sessionRegistry.unregisterSession(sessionId);
         if (userId != null && !sessionRegistry.isUserOnline(userId)) {
             presenceService.handleUserDisconnected(userId);
+            for (String roomId : activeRooms) {
+                SignalMessage userLeftBroadcast = SignalMessage.builder()
+                        .type(SignalType.USER_LEFT)
+                        .senderId(userId)
+                        .roomId(roomId)
+                        .payload(Map.of("leftUserId", userId))
+                        .timestamp(Instant.now())
+                        .build();
+                messagingTemplate.convertAndSend("/topic/call/room/" + roomId, userLeftBroadcast);
+                log.info("📡 [WebSocket DISCONNECT] Đã thông báo USER_LEFT cho phòng '{}' khi '{}' mất kết nối.", roomId, userId);
+
+                if (sessionRegistry.getRoomParticipantCount(roomId) == 0 && groupCallLifecycleService != null) {
+                    groupCallLifecycleService.notifyGroupCallEnded(roomId, userId);
+                }
+            }
         }
 
         log.info("🔴 [WebSocket DISCONNECT] Phiên đã ngắt kết nối: sessionId='{}', user='{}' | Còn lại: {} sessions",

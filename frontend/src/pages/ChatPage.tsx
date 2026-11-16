@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ChatSidebar } from '../components/chat/ChatSidebar'
 import { ChatWindow } from '../components/chat/ChatWindow'
 import { CreateGroupModal } from '../components/chat/CreateGroupModal'
@@ -51,12 +51,15 @@ export const ChatPage: React.FC = () => {
     loadConversations()
   }, [])
 
+  const activeConversationIdRef = useRef<string | null>(null)
+  activeConversationIdRef.current = activeConversation?.id || null
+
   // 2. Tải lịch sử tin nhắn và danh sách thành viên khi chọn một cuộc trò chuyện
   useEffect(() => {
     setTypingUsers([])
+    setMessages([])
+    setGroupMembers([])
     if (!activeConversation) {
-      setMessages([])
-      setGroupMembers([])
       setShowMembersPanel(false)
       return
     }
@@ -91,13 +94,15 @@ export const ChatPage: React.FC = () => {
 
   // 3. Xử lý nhận tin nhắn mới từ WebSocket STOMP thời gian thực
   const handleIncomingMessage = useCallback((newMsg: Message) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === newMsg.id)) return prev
-      return [...prev, newMsg]
-    })
+    if (newMsg.conversationId === activeConversationIdRef.current) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev
+        return [...prev, newMsg]
+      })
 
-    // Khi nhận được tin nhắn mới từ người đang gõ, xóa trạng thái typing của người đó
-    setTypingUsers((prev) => prev.filter((t) => t.userId !== newMsg.senderId))
+      // Khi nhận được tin nhắn mới từ người đang gõ, xóa trạng thái typing của người đó
+      setTypingUsers((prev) => prev.filter((t) => t.userId !== newMsg.senderId))
+    }
 
     const previewText =
       newMsg.messageType === 'IMAGE'
@@ -168,13 +173,37 @@ export const ChatPage: React.FC = () => {
     )
   }, [])
 
-  // Lắng nghe WebSocket (Chat + Typing + Presence)
+  // 6. Xử lý khi được mời vào nhóm mới hoặc thông tin nhóm cập nhật theo thời gian thực
+  const handleConversationUpdate = useCallback((updatedConv: Conversation) => {
+    setConversations((prev) => {
+      const exists = prev.some((c) => c.id === updatedConv.id)
+      const next = exists
+        ? prev.map((c) => (c.id === updatedConv.id ? updatedConv : c))
+        : [updatedConv, ...prev]
+
+      return next.sort((a, b) => {
+        const timeA = new Date(a.lastMessageAt || 0).getTime()
+        const timeB = new Date(b.lastMessageAt || 0).getTime()
+        return timeB - timeA
+      })
+    })
+
+    if (updatedConv.id === activeConversationIdRef.current) {
+      setActiveConversation(updatedConv)
+      if (updatedConv.members) {
+        setGroupMembers(updatedConv.members)
+      }
+    }
+  }, [])
+
+  // Lắng nghe WebSocket (Chat + Typing + Presence + Nhóm mới)
   const { sendTypingSignal } = useChatWebSocket(
     activeConversation ? activeConversation.id : null,
     token,
     handleIncomingMessage,
     handleTypingEvent,
-    handlePresenceEvent
+    handlePresenceEvent,
+    handleConversationUpdate
   )
 
   const handleTypingChange = useCallback(

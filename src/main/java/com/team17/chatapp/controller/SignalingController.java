@@ -6,12 +6,14 @@ import com.team17.chatapp.calling.dto.CallHistoryDto;
 import com.team17.chatapp.calling.entity.CallSession;
 import com.team17.chatapp.calling.entity.CallType;
 import com.team17.chatapp.calling.service.CallService;
+import com.team17.chatapp.calling.service.GroupCallLifecycleService;
 import com.team17.chatapp.common.ApiResponse;
 import com.team17.chatapp.websocket.dto.SignalMessage;
 import com.team17.chatapp.websocket.dto.SignalType;
 import com.team17.chatapp.websocket.service.UserSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -48,6 +50,9 @@ public class SignalingController {
     private final UserSessionRegistry sessionRegistry;
     private final CallService callService;
     private final UserRepository userRepository;
+
+    @Autowired(required = false)
+    private GroupCallLifecycleService groupCallLifecycleService;
 
     /**
      * Endpoint kiểm tra kết nối hai chiều (Heartbeat Ping-Pong)
@@ -220,40 +225,84 @@ public class SignalingController {
     }
 
     /**
-     * Người dùng tham gia vào phòng họp nhóm (Mesh Video Call)
+     * Người dùng tham gia vào phòng họp nhóm (Mesh Video Call, tối đa 5 người)
      * Client gửi lên: /app/call/join
      */
     @MessageMapping("/call/join")
     public void handleJoinRoom(@Payload SignalMessage message, Principal principal) {
-        String userId = (principal != null) ? principal.getName() : message.getSenderId();
+        String rawUserId = (message.getSenderId() != null && !message.getSenderId().isBlank())
+                ? message.getSenderId()
+                : (principal != null ? principal.getName() : null);
+        String userId = resolveToUserId(rawUserId);
         String roomId = message.getRoomId();
 
-        if (roomId == null || roomId.isBlank()) {
-            log.warn("⚠️ Bỏ qua yêu cầu join do thiếu roomId!");
+        if (roomId == null || roomId.isBlank() || userId == null || userId.isBlank()) {
+            log.warn("⚠️ Bỏ qua yêu cầu join do thiếu roomId hoặc userId!");
             return;
         }
 
+        Set<String> currentInRoom = sessionRegistry.getRoomParticipants(roomId);
+        if (!currentInRoom.contains(userId) && sessionRegistry.isRoomFull(roomId)) {
+            log.warn("🚫 [Mesh Call] Phòng '{}' đã đầy ({}/{} người). Từ chối user '{}'.",
+                    roomId, currentInRoom.size(), UserSessionRegistry.MAX_ROOM_PARTICIPANTS, userId);
+
+            SignalMessage roomFullMsg = SignalMessage.builder()
+                    .type(SignalType.ROOM_FULL)
+                    .senderId("SERVER")
+                    .receiverId(userId)
+                    .roomId(roomId)
+                    .payload(Map.of(
+                            "reason", "Phòng họp đã đạt giới hạn tối đa " + UserSessionRegistry.MAX_ROOM_PARTICIPANTS + " thành viên",
+                            "maxParticipants", UserSessionRegistry.MAX_ROOM_PARTICIPANTS
+                    ))
+                    .timestamp(Instant.now())
+                    .build();
+
+            sendSignalToUser(userId, roomFullMsg);
+            return;
+        }
+
+        // Lấy danh sách thành viên đang có mặt trước khi thêm người mới
+        Set<String> existingMemberIds = new HashSet<>(currentInRoom);
+        existingMemberIds.remove(userId);
+
         sessionRegistry.joinRoom(roomId, userId);
 
+        List<Map<String, String>> existingProfiles = existingMemberIds.stream()
+                .map(this::buildParticipantProfile)
+                .collect(Collectors.toList());
+
+        Map<String, String> joinedProfile = buildParticipantProfile(userId);
+        if (message.getSenderName() != null && !message.getSenderName().isBlank()) {
+            joinedProfile.put("displayName", message.getSenderName());
+        }
+
         // 1. Phản hồi cho người vừa vào danh sách những người ĐANG CÓ MẶT trong phòng
-        Set<String> currentParticipants = sessionRegistry.getRoomParticipants(roomId);
         SignalMessage existingUsersMsg = SignalMessage.builder()
                 .type(SignalType.JOIN_ROOM)
                 .senderId("SERVER")
                 .roomId(roomId)
                 .receiverId(userId)
-                .payload(Map.of("participants", currentParticipants))
+                .payload(Map.of(
+                        "participants", existingProfiles,
+                        "maxParticipants", UserSessionRegistry.MAX_ROOM_PARTICIPANTS
+                ))
+                .timestamp(Instant.now())
                 .build();
 
-        messagingTemplate.convertAndSendToUser(userId, "/queue/signals", existingUsersMsg);
+        sendSignalToUser(userId, existingUsersMsg);
 
         // 2. Broadcast thông báo cho CÁC THÀNH VIÊN KHÁC trong phòng biết có người mới vào
         SignalMessage userJoinedBroadcast = SignalMessage.builder()
                 .type(SignalType.USER_JOINED)
                 .senderId(userId)
-                .senderName(message.getSenderName() != null ? message.getSenderName() : userId)
+                .senderName(joinedProfile.get("displayName"))
                 .roomId(roomId)
-                .payload(Map.of("joinedUserId", userId))
+                .payload(Map.of(
+                        "joinedUserId", userId,
+                        "participant", joinedProfile
+                ))
+                .timestamp(Instant.now())
                 .build();
 
         messagingTemplate.convertAndSend("/topic/call/room/" + roomId, userJoinedBroadcast);
@@ -265,10 +314,13 @@ public class SignalingController {
      */
     @MessageMapping("/call/leave")
     public void handleLeaveRoom(@Payload SignalMessage message, Principal principal) {
-        String userId = (principal != null) ? principal.getName() : message.getSenderId();
+        String rawUserId = (message.getSenderId() != null && !message.getSenderId().isBlank())
+                ? message.getSenderId()
+                : (principal != null ? principal.getName() : null);
+        String userId = resolveToUserId(rawUserId);
         String roomId = message.getRoomId();
 
-        if (roomId != null) {
+        if (roomId != null && userId != null) {
             sessionRegistry.leaveRoom(roomId, userId);
 
             // Broadcast thông báo cho phòng họp người dùng đã rời đi
@@ -277,10 +329,68 @@ public class SignalingController {
                     .senderId(userId)
                     .roomId(roomId)
                     .payload(Map.of("leftUserId", userId))
+                    .timestamp(Instant.now())
                     .build();
 
             messagingTemplate.convertAndSend("/topic/call/room/" + roomId, userLeftBroadcast);
+
+            if (sessionRegistry.getRoomParticipantCount(roomId) == 0 && groupCallLifecycleService != null) {
+                groupCallLifecycleService.notifyGroupCallEnded(roomId, userId);
+            }
         }
+    }
+
+    /**
+     * Chuyển tiếp trạng thái Media (Bật/Tắt Mic, Camera) trong phòng họp nhóm
+     * Client gửi lên: /app/call/room-signal
+     */
+    @MessageMapping("/call/room-signal")
+    public void handleRoomMediaSignal(@Payload SignalMessage message, Principal principal) {
+        String rawUserId = (message.getSenderId() != null && !message.getSenderId().isBlank())
+                ? message.getSenderId()
+                : (principal != null ? principal.getName() : null);
+        String userId = resolveToUserId(rawUserId);
+        String roomId = message.getRoomId();
+
+        if (roomId == null || roomId.isBlank() || userId == null) {
+            return;
+        }
+
+        message.setSenderId(userId);
+        if (message.getTimestamp() == null) {
+            message.setTimestamp(Instant.now());
+        }
+
+        log.debug("🎛️ [Mesh Room Signal] User '{}' gửi '{}' trong phòng '{}'",
+                userId, message.getType(), roomId);
+
+        messagingTemplate.convertAndSend("/topic/call/room/" + roomId, message);
+    }
+
+    private Map<String, String> buildParticipantProfile(String identifier) {
+        Map<String, String> profile = new HashMap<>();
+        profile.put("userId", identifier);
+        profile.put("displayName", identifier);
+        profile.put("avatarUrl", "");
+
+        if (userRepository == null || identifier == null || identifier.isBlank()) {
+            return profile;
+        }
+
+        Optional<User> userOpt = Optional.empty();
+        try {
+            userOpt = userRepository.findById(UUID.fromString(identifier));
+        } catch (IllegalArgumentException ignored) {
+            userOpt = userRepository.findByEmail(identifier.trim().toLowerCase());
+        }
+
+        userOpt.ifPresent(u -> {
+            profile.put("displayName", u.getDisplayName());
+            if (u.getAvatarUrl() != null) {
+                profile.put("avatarUrl", u.getAvatarUrl());
+            }
+        });
+        return profile;
     }
 
     /**

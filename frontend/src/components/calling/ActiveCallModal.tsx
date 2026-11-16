@@ -1,22 +1,33 @@
-import React from 'react'
-import { Mic, MicOff, PhoneOff, Minimize2 } from 'lucide-react'
+import React, { useState } from 'react'
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Minimize2, Settings, Users } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
+import { useAuth } from '../../context/AuthContext'
 import { VideoCallView } from './VideoCallView'
+import { GroupVideoGrid } from './GroupVideoGrid'
+import { DeviceSettingsModal } from './DeviceSettingsModal'
 
 export const ActiveCallModal: React.FC = () => {
+  const { user } = useAuth()
   const {
     callStatus,
+    callMode,
     callType,
     targetUser,
     caller,
+    participants,
     duration,
     isMuted,
+    isVideoEnabled,
+    localVideoStream,
     isMinimized,
     cancelCall,
     endCall,
     toggleMute,
+    toggleVideo,
     toggleMinimize,
   } = useCall()
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   // Không hiển thị modal đầy đủ nếu đang ở trạng thái rảnh, có chuông đến hoặc đang thu nhỏ
   if (
@@ -27,7 +38,118 @@ export const ActiveCallModal: React.FC = () => {
     return null
   }
 
-  // Khi đang đàm thoại cuộc gọi Video -> Hiển thị VideoCallView toàn diện
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // Giao diện Hội nghị Video Nhóm (Mesh WebRTC 3-5 người)
+  if (callMode === 'GROUP') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md animate-fade-in p-2 sm:p-5">
+        <div className="relative w-full h-full max-w-7xl max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl border border-[#383838] bg-[#141417] flex flex-col">
+          {/* Header phòng họp nhóm */}
+          <div className="h-14 px-5 flex items-center justify-between border-b border-white/10 bg-[#1b1b1f] shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <h3 className="text-sm sm:text-base font-semibold text-white truncate max-w-[200px] sm:max-w-md">
+                {targetUser?.displayName || 'Cuộc họp nhóm'}
+              </h3>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#5B5FC7]/20 text-[#9EA2F3] border border-[#5B5FC7]/30">
+                <Users size={12} />
+                {participants.length + 1} / 5
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs sm:text-sm text-emerald-300 bg-black/40 px-3 py-1 rounded-full border border-white/10">
+                {formatDuration(duration)}
+              </span>
+              <button
+                type="button"
+                onClick={toggleMinimize}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                title="Thu nhỏ cuộc họp (vừa họp vừa chat)"
+              >
+                <Minimize2 size={17} />
+              </button>
+            </div>
+          </div>
+
+          {/* Lưới Video Adaptive & VAD */}
+          <div className="flex-1 min-h-0">
+            <GroupVideoGrid
+              localUser={{
+                id: user?.id || 'me',
+                displayName: user?.displayName || 'Bạn',
+                avatarUrl: user?.avatarUrl,
+              }}
+              localStream={localVideoStream}
+              isLocalMuted={isMuted}
+              isLocalCameraOff={!isVideoEnabled}
+              participants={participants}
+            />
+          </div>
+
+          {/* Thanh điều khiển dưới cùng */}
+          <div className="h-20 px-6 flex items-center justify-center gap-4 border-t border-white/10 bg-[#1b1b1f] shrink-0">
+            <button
+              type="button"
+              onClick={toggleMute}
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-all shadow-md ${
+                isMuted
+                  ? 'bg-rose-600/20 text-rose-400 border border-rose-500/40 hover:bg-rose-600/30'
+                  : 'bg-[#2c2c32] text-white hover:bg-[#383840]'
+              }`}
+              title={isMuted ? 'Bật Micro' : 'Tắt Micro'}
+            >
+              {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleVideo}
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-all shadow-md ${
+                !isVideoEnabled
+                  ? 'bg-rose-600/20 text-rose-400 border border-rose-500/40 hover:bg-rose-600/30'
+                  : 'bg-[#2c2c32] text-white hover:bg-[#383840]'
+              }`}
+              title={isVideoEnabled ? 'Tắt Camera' : 'Bật Camera'}
+            >
+              {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              className="h-12 w-12 rounded-full flex items-center justify-center bg-[#2c2c32] text-gray-200 hover:bg-[#383840] transition-all shadow-md"
+              title="Cài đặt thiết bị Audio/Video"
+            >
+              <Settings size={20} />
+            </button>
+
+            <button
+              type="button"
+              onClick={endCall}
+              className="h-12 px-6 rounded-full flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold shadow-lg transition-all active:scale-95"
+              title="Rời khỏi phòng họp"
+            >
+              <PhoneOff size={20} />
+              <span className="hidden sm:inline text-sm">Rời cuộc họp</span>
+            </button>
+          </div>
+
+          <DeviceSettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Khi đang đàm thoại cuộc gọi Video 1-1 -> Hiển thị VideoCallView toàn diện
   if (callType === 'VIDEO' && callStatus === 'CONNECTED') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in p-2 sm:p-6">
@@ -39,12 +161,6 @@ export const ActiveCallModal: React.FC = () => {
   }
 
   const activeUser = targetUser || caller
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
