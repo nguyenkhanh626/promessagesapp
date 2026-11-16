@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { Edit, Search, User as UserIcon, Users, X } from 'lucide-react'
-import type { Conversation } from '../../types/chat'
+import { BookUser, ChevronDown, Edit, Search, User as UserIcon, Users, X } from 'lucide-react'
+import type { Conversation, UserPresenceStatus } from '../../types/chat'
 import type { User } from '../../types/auth'
+import { STATUS_CONFIG } from './UserDirectoryModal'
 
 interface ChatSidebarProps {
   conversations: Conversation[]
@@ -9,6 +10,9 @@ interface ChatSidebarProps {
   onSelectConversation: (conversation: Conversation) => void
   onStartDirectChat: (targetUser: User) => void
   onOpenCreateGroup: () => void
+  onOpenDirectory: () => void
+  currentUserStatus: UserPresenceStatus
+  onChangeMyStatus: (status: UserPresenceStatus) => void
   searchResults: User[]
   onSearchUsers: (query: string) => void
   isSearching: boolean
@@ -20,6 +24,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onSelectConversation,
   onStartDirectChat,
   onOpenCreateGroup,
+  onOpenDirectory,
+  currentUserStatus,
+  onChangeMyStatus,
   searchResults,
   onSearchUsers,
   isSearching,
@@ -27,6 +34,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [filterQuery, setFilterQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'ALL' | 'DIRECT' | 'GROUP'>('ALL')
   const [showNewChatModal, setShowNewChatModal] = useState(false)
+  const [showStatusMenu, setShowStatusMenu] = useState(false)
 
   const formatTime = (timeStr?: string) => {
     if (!timeStr) return ''
@@ -51,32 +59,84 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     return matchName || matchLastMsg
   })
 
+  const myStatusCfg = STATUS_CONFIG[currentUserStatus] || STATUS_CONFIG.ONLINE
+
   return (
     <aside className="w-80 h-full flex flex-col bg-[#201f1f] border-r border-[#383838] select-none shrink-0">
       {/* Header Sidebar */}
-      <div className="p-4 border-b border-[#383838] flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white tracking-wide">Trò chuyện</h2>
-        <div className="flex items-center gap-1">
+      <div className="p-4 pb-3 border-b border-[#383838] space-y-2.5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white tracking-wide">Trò chuyện</h2>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onOpenDirectory}
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors"
+              title="Danh bạ người dùng"
+            >
+              <BookUser size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={onOpenCreateGroup}
+              className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-indigo-300 bg-[#5B5FC7]/20 hover:bg-[#5B5FC7]/30 border border-[#5B5FC7]/40 transition-colors"
+              title="Tạo nhóm chat mới"
+            >
+              <Users size={15} />
+              <span>Tạo nhóm</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowNewChatModal((prev) => !prev)
+                onSearchUsers('')
+              }}
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors"
+              title="Bắt đầu cuộc trò chuyện 1-1 mới"
+            >
+              <Edit size={17} />
+            </button>
+          </div>
+        </div>
+
+        {/* Bộ chuyển đổi trạng thái hoạt động cá nhân (User Presence Switcher) */}
+        <div className="relative">
           <button
             type="button"
-            onClick={onOpenCreateGroup}
-            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-indigo-300 bg-[#5B5FC7]/20 hover:bg-[#5B5FC7]/30 border border-[#5B5FC7]/40 transition-colors"
-            title="Tạo nhóm chat mới"
+            onClick={() => setShowStatusMenu((prev) => !prev)}
+            className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#181818] hover:bg-[#262626] border border-[#323232] text-xs transition-colors"
           >
-            <Users size={15} />
-            <span>Tạo nhóm</span>
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${myStatusCfg.dotColor}`} />
+              <span className="text-gray-300 font-medium">Trạng thái:</span>
+              <span className="font-semibold text-white">{myStatusCfg.label}</span>
+            </div>
+            <ChevronDown size={14} className="text-gray-400" />
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowNewChatModal((prev) => !prev)
-              onSearchUsers('')
-            }}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-white hover:bg-[#383838] transition-colors"
-            title="Bắt đầu cuộc trò chuyện 1-1 mới"
-          >
-            <Edit size={17} />
-          </button>
+
+          {showStatusMenu && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-xl bg-[#262626] border border-[#404040] shadow-xl py-1 overflow-hidden">
+              {(['ONLINE', 'BUSY', 'AWAY', 'OFFLINE'] as UserPresenceStatus[]).map((st) => {
+                const cfg = STATUS_CONFIG[st]
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => {
+                      onChangeMyStatus(st)
+                      setShowStatusMenu(false)
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-[#353535] transition-colors ${
+                      currentUserStatus === st ? 'bg-[#323232] font-bold text-white' : 'text-gray-300'
+                    }`}
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-full ${cfg.dotColor}`} />
+                    <span>{cfg.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -88,7 +148,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             type="text"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
-            placeholder="Lọc theo tên hoặc tin nhắn..."
+            placeholder="Lọc hội thoại theo tên hoặc tin nhắn..."
             className="w-full bg-[#181818] border border-[#383838] rounded-md py-1.5 pl-9 pr-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#5B5FC7]"
           />
         </div>
@@ -143,30 +203,38 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             ) : searchResults.length === 0 ? (
               <p className="text-xs text-gray-400 py-2 text-center">Không tìm thấy ai</p>
             ) : (
-              searchResults.map((user) => (
-                <button
-                  key={user.id}
-                  onClick={() => {
-                    onStartDirectChat(user)
-                    setShowNewChatModal(false)
-                  }}
-                  className="w-full flex items-center gap-2.5 p-2 rounded hover:bg-[#383838] text-left transition-colors"
-                >
-                  <div className="relative h-7 w-7 rounded-full overflow-hidden bg-[#5B5FC7] shrink-0">
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="flex h-full w-full items-center justify-center text-xs font-semibold text-white">
-                        {user.displayName.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="truncate">
-                    <p className="text-xs font-semibold text-white truncate">{user.displayName}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
-                  </div>
-                </button>
-              ))
+              searchResults.map((user) => {
+                const st = (user.status as UserPresenceStatus) || 'OFFLINE'
+                const dotColor = STATUS_CONFIG[st]?.dotColor || 'bg-gray-500'
+
+                return (
+                  <button
+                    key={user.id}
+                    onClick={() => {
+                      onStartDirectChat(user)
+                      setShowNewChatModal(false)
+                    }}
+                    className="w-full flex items-center gap-2.5 p-2 rounded hover:bg-[#383838] text-left transition-colors"
+                  >
+                    <div className="relative h-7 w-7 rounded-full overflow-hidden bg-[#5B5FC7] shrink-0">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-xs font-semibold text-white">
+                          {user.displayName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span
+                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-[#262626] ${dotColor}`}
+                      />
+                    </div>
+                    <div className="truncate">
+                      <p className="text-xs font-semibold text-white truncate">{user.displayName}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
+                    </div>
+                  </button>
+                )
+              })
             )}
           </div>
         </div>
@@ -178,13 +246,14 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           <div className="p-6 text-center text-gray-500 text-xs">
             <UserIcon size={32} className="mx-auto mb-2 opacity-40" />
             <p>Chưa có cuộc trò chuyện nào.</p>
-            <p className="mt-1">Nhấn "Tạo nhóm" hoặc biểu tượng cây bút để bắt đầu!</p>
+            <p className="mt-1">Nhấn "Tạo nhóm", mở "Danh bạ" hoặc biểu tượng cây bút để bắt đầu!</p>
           </div>
         ) : (
           filteredConversations.map((conv) => {
             const isActive = conv.id === activeConversationId
             const isGroup = conv.type === 'GROUP'
-            const isOnline = conv.otherUser?.status === 'ONLINE'
+            const otherStatus = (conv.otherUser?.status as UserPresenceStatus) || 'OFFLINE'
+            const statusDotColor = STATUS_CONFIG[otherStatus]?.dotColor || 'bg-gray-500'
 
             return (
               <button
@@ -214,9 +283,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     </span>
                   ) : (
                     <span
-                      className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#201f1f] ${
-                        isOnline ? 'bg-emerald-500' : 'bg-gray-500'
-                      }`}
+                      className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#201f1f] ${statusDotColor}`}
+                      title={STATUS_CONFIG[otherStatus]?.label}
                     />
                   )}
                 </div>

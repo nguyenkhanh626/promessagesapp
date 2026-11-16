@@ -1,9 +1,9 @@
 import React from 'react'
-import { Phone, PhoneOff } from 'lucide-react'
+import { Phone, PhoneOff, Video } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
 
 export const IncomingCallModal: React.FC = () => {
-  const { callStatus, caller, acceptCall, rejectCall } = useCall()
+  const { callStatus, callType, caller, acceptCall, rejectCall } = useCall()
 
   if (callStatus !== 'INCOMING_RINGING' || !caller) {
     return null
@@ -30,8 +30,17 @@ export const IncomingCallModal: React.FC = () => {
         {/* Thông tin người gọi */}
         <h3 className="text-xl font-bold text-white tracking-wide">{caller.displayName}</h3>
         <p className="mt-1 text-sm text-[#7f85f5] font-medium flex items-center justify-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          Cuộc gọi thoại Teams đến...
+          {callType === 'VIDEO' ? (
+            <>
+              <Video size={16} className="text-purple-400 animate-pulse" />
+              <span>Cuộc gọi Video Teams đến...</span>
+            </>
+          ) : (
+            <>
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Cuộc gọi thoại Teams đến...</span>
+            </>
+          )}
         </p>
 
         {/* Nút thao tác Nhận / Từ chối */}

@@ -1,5 +1,7 @@
 import type { User } from './auth'
 
+export type UserPresenceStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'AWAY'
+
 export interface Message {
   id: string
   conversationId: string
@@ -20,7 +22,7 @@ export interface ConversationMember {
   displayName: string
   email: string
   avatarUrl?: string
-  status?: 'ONLINE' | 'OFFLINE' | 'BUSY' | 'AWAY'
+  status?: UserPresenceStatus
   role: 'ADMIN' | 'MEMBER'
   joinedAt: string
 }
@@ -59,4 +61,21 @@ export interface FileUploadResponse {
   contentType: string
   fileSize: number
   messageType: 'IMAGE' | 'FILE'
+}
+
+export interface PresenceEvent {
+  userId: string
+  email: string
+  displayName: string
+  avatarUrl?: string
+  status: UserPresenceStatus
+  updatedAt: string
+}
+
+export interface TypingEvent {
+  conversationId: string
+  userId: string
+  displayName: string
+  avatarUrl?: string
+  typing: boolean
 }

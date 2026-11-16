@@ -22,6 +22,8 @@ public class UserSessionRegistry {
     // userId -> Set<sessionId> (Một tài khoản có thể đăng nhập trên nhiều tab/thiết bị)
     private final ConcurrentHashMap<String, Set<String>> userToSessionsMap = new ConcurrentHashMap<>();
 
+    public static final int MAX_ROOM_PARTICIPANTS = 5;
+
     // roomId -> Set<userId> (Danh sách người tham gia trong từng phòng gọi)
     private final ConcurrentHashMap<String, Set<String>> roomParticipantsMap = new ConcurrentHashMap<>();
 
@@ -123,6 +125,38 @@ public class UserSessionRegistry {
      */
     public Set<String> getRoomParticipants(String roomId) {
         return roomParticipantsMap.getOrDefault(roomId, Collections.emptySet());
+    }
+
+    /**
+     * Kiểm tra phòng họp đã đạt giới hạn tối đa (5 thành viên) chưa
+     */
+    public boolean isRoomFull(String roomId) {
+        if (roomId == null) return false;
+        Set<String> participants = roomParticipantsMap.get(roomId);
+        return participants != null && participants.size() >= MAX_ROOM_PARTICIPANTS;
+    }
+
+    /**
+     * Lấy số lượng thành viên đang có mặt trong phòng gọi
+     */
+    public int getRoomParticipantCount(String roomId) {
+        if (roomId == null) return 0;
+        Set<String> participants = roomParticipantsMap.get(roomId);
+        return (participants != null) ? participants.size() : 0;
+    }
+
+    /**
+     * Lấy danh sách các phòng gọi mà user đang tham gia
+     */
+    public Set<String> getRoomsByUser(String userId) {
+        if (userId == null) return Collections.emptySet();
+        Set<String> result = new CopyOnWriteArraySet<>();
+        roomParticipantsMap.forEach((roomId, participants) -> {
+            if (participants.contains(userId)) {
+                result.add(roomId);
+            }
+        });
+        return result;
     }
 
     /**

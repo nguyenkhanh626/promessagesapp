@@ -140,4 +140,124 @@ class SignalingControllerTest {
         verify(callService).cancelCall(eq("room-123"));
         verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(cancelMsg));
     }
+
+    @Test
+    @DisplayName("Gửi CALL_INVITE với callType = VIDEO -> initiateCall được gọi với CallType.VIDEO")
+    void handleP2PSignal_VideoInvite() {
+        SignalMessage videoInviteMsg = SignalMessage.builder()
+                .type(SignalType.CALL_INVITE)
+                .receiverId("user-callee")
+                .roomId("room-video-123")
+                .callType(com.team17.chatapp.calling.entity.CallType.VIDEO)
+                .build();
+
+        when(callService.isUserInCall("user-callee")).thenReturn(false);
+
+        signalingController.handleP2PSignal(videoInviteMsg, principal);
+
+        verify(callService).initiateCall(
+                eq("user-sender"),
+                eq("user-callee"),
+                eq("room-video-123"),
+                eq(com.team17.chatapp.calling.entity.CallType.VIDEO)
+        );
+        verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(videoInviteMsg));
+    }
+
+    @Test
+    @DisplayName("Gửi CAMERA_TOGGLE -> Chuyển tiếp tín hiệu toggle camera sang đối phương")
+    void handleP2PSignal_CameraToggle() {
+        SignalMessage toggleMsg = SignalMessage.builder()
+                .type(SignalType.CAMERA_TOGGLE)
+                .receiverId("user-callee")
+                .roomId("room-video-123")
+                .payload(java.util.Map.of("enabled", false))
+                .build();
+
+        signalingController.handleP2PSignal(toggleMsg, principal);
+
+        verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(toggleMsg));
+    }
+
+    @Test
+    @DisplayName("Tham gia phòng nhóm -> Gửi JOIN_ROOM cho user và broadcast USER_JOINED tới room")
+    void handleJoinRoom_Success() {
+        SignalMessage joinMsg = SignalMessage.builder()
+                .type(SignalType.JOIN_ROOM)
+                .roomId("group-room-1")
+                .senderName("User A")
+                .build();
+
+        when(sessionRegistry.getRoomParticipants("group-room-1")).thenReturn(java.util.Set.of("user-existing"));
+        when(sessionRegistry.isRoomFull("group-room-1")).thenReturn(false);
+
+        signalingController.handleJoinRoom(joinMsg, principal);
+
+        verify(sessionRegistry).joinRoom("group-room-1", "user-sender");
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("user-sender"),
+                eq("/queue/signals"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.JOIN_ROOM)
+        );
+        verify(messagingTemplate).convertAndSend(
+                eq("/topic/call/room/group-room-1"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.USER_JOINED)
+        );
+    }
+
+    @Test
+    @DisplayName("Tham gia phòng đã đủ 5 người -> Trả về ROOM_FULL và không gọi joinRoom")
+    void handleJoinRoom_RoomFull() {
+        SignalMessage joinMsg = SignalMessage.builder()
+                .type(SignalType.JOIN_ROOM)
+                .roomId("group-room-full")
+                .build();
+
+        when(sessionRegistry.getRoomParticipants("group-room-full"))
+                .thenReturn(java.util.Set.of("u1", "u2", "u3", "u4", "u5"));
+        when(sessionRegistry.isRoomFull("group-room-full")).thenReturn(true);
+
+        signalingController.handleJoinRoom(joinMsg, principal);
+
+        verify(sessionRegistry, org.mockito.Mockito.never()).joinRoom(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("user-sender"),
+                eq("/queue/signals"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.ROOM_FULL)
+        );
+    }
+
+    @Test
+    @DisplayName("Rời phòng họp nhóm -> Xóa khỏi registry và broadcast USER_LEFT")
+    void handleLeaveRoom_Success() {
+        SignalMessage leaveMsg = SignalMessage.builder()
+                .type(SignalType.LEAVE_ROOM)
+                .roomId("group-room-1")
+                .build();
+
+        signalingController.handleLeaveRoom(leaveMsg, principal);
+
+        verify(sessionRegistry).leaveRoom("group-room-1", "user-sender");
+        verify(messagingTemplate).convertAndSend(
+                eq("/topic/call/room/group-room-1"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) -> m.getType() == SignalType.USER_LEFT)
+        );
+    }
+
+    @Test
+    @DisplayName("Gửi tín hiệu Mic/Cam trong phòng nhóm -> Broadcast tới /topic/call/room/{roomId}")
+    void handleRoomMediaSignal_BroadcastsToRoom() {
+        SignalMessage micMsg = SignalMessage.builder()
+                .type(SignalType.MIC_TOGGLE)
+                .roomId("group-room-1")
+                .payload(java.util.Map.of("enabled", false))
+                .build();
+
+        signalingController.handleRoomMediaSignal(micMsg, principal);
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/call/room/group-room-1"), eq(micMsg));
+    }
 }

@@ -2,6 +2,7 @@ package com.team17.chatapp.chat.controller;
 
 import com.team17.chatapp.auth.dto.UserDto;
 import com.team17.chatapp.auth.entity.User;
+import com.team17.chatapp.auth.entity.UserStatus;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.dto.AddGroupMembersRequest;
 import com.team17.chatapp.chat.dto.ConversationDto;
@@ -9,9 +10,13 @@ import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.DirectConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PresenceEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
+import com.team17.chatapp.chat.dto.TypingEventPayload;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
+import com.team17.chatapp.chat.dto.UpdateStatusRequest;
 import com.team17.chatapp.chat.service.ChatService;
+import com.team17.chatapp.chat.service.PresenceService;
 import com.team17.chatapp.common.ApiResponse;
 import com.team17.chatapp.exception.AppException;
 import jakarta.validation.Valid;
@@ -39,6 +44,7 @@ import java.util.UUID;
 public class ConversationController {
 
     private final ChatService chatService;
+    private final PresenceService presenceService;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -74,6 +80,7 @@ public class ConversationController {
     ) {
         User currentUser = getAuthenticatedUser(authentication);
         ConversationDto conversation = chatService.createGroupConversation(currentUser.getId(), request);
+        notifyGroupMembers(conversation);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Tạo nhóm trò chuyện thành công", conversation));
     }
@@ -86,6 +93,7 @@ public class ConversationController {
     ) {
         User currentUser = getAuthenticatedUser(authentication);
         ConversationDto updated = chatService.updateGroupConversation(conversationId, currentUser.getId(), request);
+        notifyGroupMembers(updated);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin nhóm thành công", updated));
     }
 
@@ -117,6 +125,7 @@ public class ConversationController {
     ) {
         User currentUser = getAuthenticatedUser(authentication);
         ConversationDto updated = chatService.addMembersToGroup(conversationId, currentUser.getId(), request);
+        notifyGroupMembers(updated);
         return ResponseEntity.ok(ApiResponse.success("Thêm thành viên vào nhóm thành công", updated));
     }
 
@@ -141,6 +150,27 @@ public class ConversationController {
         return ResponseEntity.ok(ApiResponse.success(messages));
     }
 
+    @GetMapping("/conversations/{id}/messages/search")
+    public ResponseEntity<ApiResponse<List<MessageDto>>> searchMessagesInConversation(
+            @PathVariable("id") UUID conversationId,
+            @RequestParam("q") String keyword,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        List<MessageDto> results = chatService.searchMessagesInConversation(conversationId, currentUser.getId(), keyword);
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    @GetMapping("/messages/search")
+    public ResponseEntity<ApiResponse<List<MessageDto>>> searchAllMessages(
+            @RequestParam("q") String keyword,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        List<MessageDto> results = chatService.searchAllMyMessages(currentUser.getId(), keyword);
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
     @PostMapping("/conversations/{id}/messages")
     public ResponseEntity<ApiResponse<MessageDto>> sendMessage(
             @PathVariable("id") UUID conversationId,
@@ -157,6 +187,46 @@ public class ConversationController {
                 .body(ApiResponse.success("Gửi tin nhắn thành công", messageDto));
     }
 
+    @PostMapping("/conversations/{id}/typing")
+    public ResponseEntity<ApiResponse<Void>> sendTypingIndicator(
+            @PathVariable("id") UUID conversationId,
+            @RequestBody TypingEventPayload payload,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        TypingEventPayload event = TypingEventPayload.builder()
+                .conversationId(conversationId)
+                .userId(currentUser.getId())
+                .displayName(currentUser.getDisplayName())
+                .avatarUrl(currentUser.getAvatarUrl())
+                .typing(payload != null && payload.isTyping())
+                .build();
+
+        messagingTemplate.convertAndSend("/topic/chat/" + conversationId + "/typing", event);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PutMapping("/users/me/status")
+    public ResponseEntity<ApiResponse<PresenceEventDto>> updateMyStatus(
+            @Valid @RequestBody UpdateStatusRequest request,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        PresenceEventDto event = presenceService.updateUserStatus(currentUser.getId(), request.getStatus());
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật trạng thái hoạt động", event));
+    }
+
+    @GetMapping("/users/directory")
+    public ResponseEntity<ApiResponse<List<UserDto>>> getUserDirectory(
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "status", required = false) UserStatus status,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        List<UserDto> directory = presenceService.getUserDirectory(currentUser.getId(), query, status);
+        return ResponseEntity.ok(ApiResponse.success(directory));
+    }
+
     @GetMapping("/users/search")
     public ResponseEntity<ApiResponse<List<UserDto>>> searchUsers(
             @RequestParam(value = "q", required = false) String query,
@@ -165,5 +235,27 @@ public class ConversationController {
         User currentUser = getAuthenticatedUser(authentication);
         List<UserDto> users = chatService.searchUsers(query, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(users));
+    }
+
+    private void notifyGroupMembers(ConversationDto conversation) {
+        if (conversation == null || conversation.getMembers() == null) {
+            return;
+        }
+        for (ConversationMemberDto member : conversation.getMembers()) {
+            if (member.getEmail() != null && !member.getEmail().isBlank()) {
+                messagingTemplate.convertAndSendToUser(
+                        member.getEmail(),
+                        "/queue/conversations",
+                        conversation
+                );
+            }
+            if (member.getUserId() != null) {
+                messagingTemplate.convertAndSendToUser(
+                        member.getUserId().toString(),
+                        "/queue/conversations",
+                        conversation
+                );
+            }
+        }
     }
 }

@@ -14,10 +14,33 @@ export type SignalType =
   | 'CALL_OFFER'
   | 'CALL_ANSWER'
   | 'ICE_CANDIDATE'
+  | 'CAMERA_TOGGLE'
+  | 'MIC_TOGGLE'
+  | 'DEVICE_CHANGE'
   | 'JOIN_ROOM'
   | 'LEAVE_ROOM'
   | 'USER_JOINED'
   | 'USER_LEFT'
+  | 'ROOM_FULL'
+  | 'ROOM_STATE'
+
+/**
+ * Chế độ cuộc gọi: 1-1 (DIRECT) hoặc Nhóm (GROUP)
+ */
+export type CallMode = 'DIRECT' | 'GROUP'
+
+/**
+ * Thông tin thành viên trong cuộc gọi nhóm (Mesh WebRTC)
+ */
+export interface GroupParticipant {
+  userId: string
+  displayName: string
+  avatarUrl?: string
+  stream?: MediaStream | null
+  isMuted: boolean
+  isCameraOff: boolean
+  iceState?: RTCIceConnectionState
+}
 
 /**
  * Trạng thái máy trạng thái cuộc gọi phía Client
@@ -39,6 +62,7 @@ export interface SignalMessage {
   senderName?: string
   receiverId?: string
   roomId?: string
+  callType?: 'AUDIO' | 'VIDEO'
   payload?: any
   timestamp?: string
 }

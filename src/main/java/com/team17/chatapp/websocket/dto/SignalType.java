@@ -22,9 +22,16 @@ public enum SignalType {
     CALL_ANSWER,        // WebRTC SDP Answer
     ICE_CANDIDATE,      // WebRTC ICE Candidate (trao đổi địa chỉ mạng/port)
 
+    // Điều khiển trạng thái Camera & Micro trong cuộc gọi (Tuần 3)
+    CAMERA_TOGGLE,      // Thông báo đối phương trạng thái bật/tắt Camera
+    MIC_TOGGLE,         // Thông báo đối phương trạng thái bật/tắt Micro
+    DEVICE_CHANGE,      // Thông báo thay đổi thiết bị đầu vào (Camera/Mic)
+
     // Quản lý phòng họp nhóm (Mesh WebRTC)
     JOIN_ROOM,          // Thành viên vào phòng họp
     LEAVE_ROOM,         // Thành viên rời phòng họp
     USER_JOINED,        // Server broadcast thông báo có người mới vào
-    USER_LEFT           // Server broadcast thông báo có người rời phòng
+    USER_LEFT,          // Server broadcast thông báo có người rời phòng
+    ROOM_FULL,          // Phòng họp đã đạt giới hạn tối đa (5 người)
+    ROOM_STATE          // Đồng bộ trạng thái phòng họp
 }
