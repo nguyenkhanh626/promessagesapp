@@ -10,8 +10,10 @@ public record WhiteboardData(
         String strokeColor,
         int strokeWidth,
         UUID authorId,
+        String authorName,
         String text,
-        int fontSize) {
+        int fontSize,
+        String fillColor) {
 
     public record Point(double x, double y) {
         public boolean isValid() {
@@ -31,6 +33,9 @@ public record WhiteboardData(
                 && strokeWidth >= 1 && strokeWidth <= 100
                 && fontSize >= 0 && fontSize <= 100
                 && (text == null || text.length() <= 5000)
+                && (authorName == null || authorName.length() <= 100)
+                && (fillColor == null || fillColor.equals("transparent")
+                    || fillColor.matches("#[0-9a-fA-F]{6}"))
                 && (type != WhiteboardShapeType.TEXT || (text != null && !text.isBlank()));
     }
 }

@@ -18,8 +18,18 @@ export interface WhiteboardShape {
   strokeColor: string
   strokeWidth: number
   authorId: string
+  authorName?: string
+  fillColor?: string
   text?: string
   fontSize?: number
+}
+
+export interface WhiteboardCursor {
+  userId: string
+  point: WhiteboardPoint
+  authorName: string
+  color: string
+  updatedAt?: number
 }
 
 export interface WhiteboardSession {
@@ -36,4 +46,6 @@ export type WhiteboardEvent =
   | { action: 'ERASE'; point: WhiteboardPoint; eraserSize: number; shape?: never; shapeId?: never }
   | { action: 'CLEAR'; shape?: never; shapeId?: never; point?: never; eraserSize?: never }
   | { action: 'UNDO'; shapeId: string; shape?: never; point?: never; eraserSize?: never }
+  | { action: 'REDO'; shape: WhiteboardShape; shapeId?: never; point?: never; eraserSize?: never }
+  | { action: 'RESTORE'; shapes: WhiteboardShape[]; shape?: never; shapeId?: never; point?: never; eraserSize?: never }
   | { action: 'MOVE'; shapeId: string; point: WhiteboardPoint; shape?: never; eraserSize?: never }

@@ -36,7 +36,7 @@ public class WhiteboardSubscriptionInterceptor implements ChannelInterceptor {
         if (destination == null || !destination.startsWith(TOPIC_PREFIX)) {
             return message;
         }
-        String sessionId = destination.substring(TOPIC_PREFIX.length());
+        String sessionId = destination.substring(TOPIC_PREFIX.length()).split("/", 2)[0];
         try {
             UUID id = UUID.fromString(sessionId);
             String username = accessor.getUser() == null ? null : accessor.getUser().getName();

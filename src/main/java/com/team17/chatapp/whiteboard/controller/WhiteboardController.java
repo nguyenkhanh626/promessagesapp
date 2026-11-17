@@ -7,6 +7,7 @@ import com.team17.chatapp.exception.AppException;
 import com.team17.chatapp.whiteboard.dto.WhiteboardSessionDto;
 import com.team17.chatapp.whiteboard.dto.WhiteboardSessionRequest;
 import com.team17.chatapp.whiteboard.dto.WhiteboardSnapshotRequest;
+import com.team17.chatapp.whiteboard.dto.WhiteboardSnapshotResponse;
 import com.team17.chatapp.whiteboard.service.WhiteboardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,7 @@ public class WhiteboardController {
     private final WhiteboardService whiteboardService;
     private final UserRepository userRepository;
 
-    @PostMapping
+    @PostMapping({"", "/session"})
     public ResponseEntity<ApiResponse<WhiteboardSessionDto>> openOrCreate(
             @Valid @RequestBody WhiteboardSessionRequest request,
             Authentication authentication) {
@@ -49,13 +50,22 @@ public class WhiteboardController {
     }
 
     @PostMapping("/{id}/snapshot")
-    public ResponseEntity<ApiResponse<WhiteboardSessionDto>> saveSnapshot(
+    public ResponseEntity<ApiResponse<WhiteboardSnapshotResponse>> saveSnapshot(
             @PathVariable UUID id,
             @Valid @RequestBody WhiteboardSnapshotRequest request,
             Authentication authentication) {
         User user = getAuthenticatedUser(authentication);
-        WhiteboardSessionDto session = whiteboardService.saveSnapshot(id, user.getId(), request.shapes());
-        return ResponseEntity.ok(ApiResponse.success("Đã lưu bảng vẽ", session));
+        WhiteboardSnapshotResponse snapshot = whiteboardService.saveSnapshot(id, user.getId(), request.shapes());
+        return ResponseEntity.ok(ApiResponse.success("Đã lưu bảng vẽ", snapshot));
+    }
+
+    @GetMapping("/{id}/snapshot")
+    public ResponseEntity<ApiResponse<WhiteboardSnapshotResponse>> getLatestSnapshot(
+            @PathVariable UUID id,
+            Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+        return ResponseEntity.ok(ApiResponse.success(
+                whiteboardService.getLatestSnapshot(id, user.getId())));
     }
 
     private User getAuthenticatedUser(Authentication authentication) {

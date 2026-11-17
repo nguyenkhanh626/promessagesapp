@@ -24,7 +24,7 @@ export function applyWhiteboardEvent(shapes: WhiteboardShape[], event: Whiteboar
   switch (event.action) {
     case 'DRAW':
       return shapes.some((shape) => shape.id === event.shape.id)
-        ? shapes
+        ? shapes.map((shape) => shape.id === event.shape.id ? event.shape : shape)
         : [...shapes, event.shape]
     case 'ERASE':
       return shapes.filter((shape) => !intersects(shape, event.point, event.eraserSize / 2))
@@ -34,6 +34,12 @@ export function applyWhiteboardEvent(shapes: WhiteboardShape[], event: Whiteboar
       const index = shapes.findIndex((shape) => shape.id === event.shapeId)
       return index < 0 ? shapes : shapes.filter((_, shapeIndex) => shapeIndex !== index)
     }
+    case 'REDO':
+      return shapes.some((shape) => shape.id === event.shape.id)
+        ? shapes
+        : [...shapes, event.shape]
+    case 'RESTORE':
+      return event.shapes
     case 'MOVE':
       return shapes.map((shape) => shape.id === event.shapeId && shape.type === 'TEXT'
         ? { ...shape, points: [event.point, ...shape.points.slice(1)] }

@@ -24,6 +24,9 @@ public class WhiteboardSession extends BaseEntity {
     @Column(name = "conversation_id", nullable = false, unique = true)
     private UUID conversationId;
 
+    @Column(name = "created_by")
+    private UUID createdBy;
+
     @Column(name = "title", nullable = false, length = 150)
     @Builder.Default
     private String title = "Bảng vẽ nhóm";

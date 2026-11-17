@@ -1,17 +1,32 @@
-import { useCallback, useEffect, useRef, type MouseEvent, type PointerEvent } from 'react'
-import type { WhiteboardEvent, WhiteboardPoint, WhiteboardShape } from '../../types/whiteboard'
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
+import type {
+  WhiteboardCursor,
+  WhiteboardEvent,
+  WhiteboardPoint,
+  WhiteboardShape,
+} from '../../types/whiteboard'
 
 export type WhiteboardTool = 'PENCIL' | 'ERASER' | 'RECTANGLE' | 'ELLIPSE' | 'LINE' | 'ARROW' | 'TEXT'
 
 interface WhiteboardCanvasProps {
   color: string
+  fillColor: string
   strokeWidth: number
   fontSize: number
   tool: WhiteboardTool
   shapes: WhiteboardShape[]
+  cursors: WhiteboardCursor[]
   onLocalEvent: (event: WhiteboardEvent) => void
+  onPreviewShape: (shape: WhiteboardShape) => void
+  onCursorMove: (point: WhiteboardPoint) => void
   authorId: string
+  authorName: string
   onCanvasReady: (canvas: HTMLCanvasElement | null) => void
+}
+
+interface TextDraft {
+  point: WhiteboardPoint
+  text: string
 }
 
 function drawShape(context: CanvasRenderingContext2D, shape: WhiteboardShape) {
@@ -31,7 +46,9 @@ function drawShape(context: CanvasRenderingContext2D, shape: WhiteboardShape) {
 
   context.beginPath()
   context.strokeStyle = shape.strokeColor
-  context.fillStyle = shape.strokeColor
+  context.fillStyle = shape.fillColor && shape.fillColor !== 'transparent'
+    ? shape.fillColor
+    : 'transparent'
   context.lineWidth = shape.strokeWidth
   context.lineCap = 'round'
   context.lineJoin = 'round'
@@ -40,6 +57,7 @@ function drawShape(context: CanvasRenderingContext2D, shape: WhiteboardShape) {
   if (shape.type === 'FREEHAND') {
     if (points.length === 1) {
       context.arc(points[0].x, points[0].y, shape.strokeWidth / 2, 0, Math.PI * 2)
+      context.fillStyle = shape.strokeColor
       context.fill()
       return
     }
@@ -59,6 +77,7 @@ function drawShape(context: CanvasRenderingContext2D, shape: WhiteboardShape) {
     const height = Math.abs(end.y - start.y)
     if (shape.type === 'RECTANGLE') context.rect(left, top, width, height)
     else context.ellipse(left + width / 2, top + height / 2, width / 2, height / 2, 0, 0, Math.PI * 2)
+    if (shape.fillColor && shape.fillColor !== 'transparent') context.fill()
   } else {
     const start = points[0]
     const end = points[points.length - 1]
@@ -75,7 +94,7 @@ function drawShape(context: CanvasRenderingContext2D, shape: WhiteboardShape) {
   context.stroke()
 }
 
-function pointFromEvent(event: MouseEvent<HTMLCanvasElement>): WhiteboardPoint {
+function pointFromEvent(event: { clientX: number; clientY: number; currentTarget: HTMLCanvasElement }): WhiteboardPoint {
   const bounds = event.currentTarget.getBoundingClientRect()
   return { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
 }
@@ -93,15 +112,25 @@ function shapeTypeForTool(tool: WhiteboardTool): WhiteboardShape['type'] {
   }
 }
 
+function constrainShape(start: WhiteboardPoint, end: WhiteboardPoint): WhiteboardPoint {
+  const side = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y))
+  return {
+    x: start.x + Math.sign(end.x - start.x || 1) * side,
+    y: start.y + Math.sign(end.y - start.y || 1) * side,
+  }
+}
+
 export function WhiteboardCanvas({
-  color, strokeWidth, fontSize, tool, shapes, onLocalEvent, authorId,
-  onCanvasReady,
+  color, fillColor, strokeWidth, fontSize, tool, shapes, cursors,
+  onLocalEvent, onPreviewShape, onCursorMove, authorId, authorName, onCanvasReady,
 }: WhiteboardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewRef = useRef<WhiteboardShape | null>(null)
   const cursorRef = useRef<{ point: WhiteboardPoint; size: number } | null>(null)
   const movingTextRef = useRef<string | null>(null)
   const textHitOnPointerDownRef = useRef(false)
+  const textCommittedRef = useRef(false)
+  const [textDraft, setTextDraft] = useState<TextDraft | null>(null)
   const eraseSize = Math.max(18, strokeWidth * 3)
 
   const redraw = useCallback(() => {
@@ -154,11 +183,11 @@ export function WhiteboardCanvas({
       const context = event.currentTarget.getContext('2d')
       const textShape = [...shapes].reverse().find((shape) => {
         if (shape.type !== 'TEXT' || !shape.text || !context || !shape.points[0]) return false
-        const fontSize = shape.fontSize || 20
-        context.font = `${fontSize}px sans-serif`
+        const shapeFontSize = shape.fontSize || 20
+        context.font = `${shapeFontSize}px sans-serif`
         const lines = shape.text.split('\n')
         const width = Math.max(...lines.map((line) => context.measureText(line).width))
-        const height = lines.length * fontSize * 1.25
+        const height = lines.length * shapeFontSize * 1.25
         return point.x >= shape.points[0].x - 4
           && point.x <= shape.points[0].x + width + 4
           && point.y >= shape.points[0].y - 4
@@ -168,6 +197,9 @@ export function WhiteboardCanvas({
         textHitOnPointerDownRef.current = true
         event.currentTarget.setPointerCapture(event.pointerId)
         movingTextRef.current = textShape.id
+      } else {
+        textCommittedRef.current = false
+        setTextDraft({ point, text: '' })
       }
       return
     }
@@ -185,6 +217,8 @@ export function WhiteboardCanvas({
       strokeColor: color,
       strokeWidth,
       authorId,
+      authorName,
+      fillColor,
       fontSize,
     }
     redraw()
@@ -192,6 +226,7 @@ export function WhiteboardCanvas({
 
   const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
     const point = pointFromEvent(event)
+    onCursorMove(point)
     if (movingTextRef.current) {
       onLocalEvent({ action: 'MOVE', shapeId: movingTextRef.current, point })
       return
@@ -203,8 +238,15 @@ export function WhiteboardCanvas({
       return
     }
     if (!previewRef.current) return
-    if (tool === 'PENCIL') previewRef.current.points.push(point)
-    else previewRef.current.points = [previewRef.current.points[0], point]
+    if (tool === 'PENCIL') {
+      previewRef.current.points.push(point)
+    } else {
+      const end = event.shiftKey && (tool === 'RECTANGLE' || tool === 'ELLIPSE')
+        ? constrainShape(previewRef.current.points[0], point)
+        : point
+      previewRef.current.points = [previewRef.current.points[0], end]
+    }
+    onPreviewShape({ ...previewRef.current, points: [...previewRef.current.points] })
     redraw()
   }
 
@@ -222,34 +264,45 @@ export function WhiteboardCanvas({
     if (!shape) return
     const point = pointFromEvent(event)
     if (tool === 'PENCIL') shape.points.push(point)
-    else shape.points = [shape.points[0], point]
+    else {
+      const end = event.shiftKey && (tool === 'RECTANGLE' || tool === 'ELLIPSE')
+        ? constrainShape(shape.points[0], point)
+        : point
+      shape.points = [shape.points[0], end]
+    }
     previewRef.current = null
     onLocalEvent({ action: 'DRAW', shape })
     redraw()
   }
 
-  const handleDoubleClick = (event: MouseEvent<HTMLCanvasElement>) => {
-    if (tool !== 'TEXT') return
-    if (textHitOnPointerDownRef.current) {
-      textHitOnPointerDownRef.current = false
-      return
-    }
-    const point = pointFromEvent(event)
-    const text = window.prompt('Nhập nội dung văn bản')
-    if (!text?.trim()) return
+  const commitText = (text: string) => {
+    const draft = textDraft
+    if (!draft || textCommittedRef.current) return
+    textCommittedRef.current = true
+    setTextDraft(null)
+    if (!text.trim()) return
     onLocalEvent({
       action: 'DRAW',
       shape: {
         id: crypto.randomUUID(),
         type: 'TEXT',
-        points: [point],
+        points: [draft.point],
         strokeColor: color,
         strokeWidth,
         authorId,
+        authorName,
         text: text.trim(),
         fontSize,
+        fillColor: 'transparent',
       },
     })
+  }
+
+  const handleDoubleClick = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (tool === 'TEXT' && textHitOnPointerDownRef.current) {
+      textHitOnPointerDownRef.current = false
+      event.preventDefault()
+    }
   }
 
   const cancelStroke = () => {
@@ -259,17 +312,66 @@ export function WhiteboardCanvas({
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-label="Bảng vẽ cộng tác"
-      className={`block h-full w-full touch-none ${
-        tool === 'TEXT' ? 'cursor-text' : tool === 'ERASER' ? 'cursor-none' : 'cursor-crosshair'
-      }`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={finishStroke}
-      onPointerCancel={cancelStroke}
-      onDoubleClick={handleDoubleClick}
-    />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={canvasRef}
+        aria-label="Bảng vẽ cộng tác"
+        className={`block h-full w-full touch-none ${
+          tool === 'TEXT' ? 'cursor-text' : tool === 'ERASER' ? 'cursor-none' : 'cursor-crosshair'
+        }`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishStroke}
+        onPointerCancel={cancelStroke}
+        onDoubleClick={handleDoubleClick}
+      />
+      {textDraft && (
+        <div
+          autoFocus
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-multiline="true"
+          aria-label="Nhập nội dung hộp văn bản"
+          data-placeholder="Nhập văn bản..."
+          onInput={(event) => setTextDraft({ ...textDraft, text: event.currentTarget.innerText })}
+          onBlur={(event) => commitText(event.currentTarget.innerText)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              textCommittedRef.current = true
+              setTextDraft(null)
+            } else if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault()
+              commitText(event.currentTarget.innerText)
+            }
+          }}
+          style={{
+            left: textDraft.point.x,
+            top: textDraft.point.y,
+            color,
+            fontSize,
+            minWidth: 180,
+            minHeight: fontSize + 8,
+            whiteSpace: 'pre-wrap',
+          }}
+          className="absolute z-10 min-w-44 rounded border border-[#5b5fc7] bg-white/95 p-1 outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[#8a8886]"
+        />
+      )}
+      {cursors.map((cursor) => (
+        <div
+          key={cursor.userId}
+          className="pointer-events-none absolute z-20 whitespace-nowrap"
+          style={{ left: cursor.point.x, top: cursor.point.y, color: cursor.color }}
+        >
+          <svg width="16" height="20" viewBox="0 0 16 20" fill="currentColor" aria-hidden="true">
+            <path d="M1 1v15l4-4 3 6 3-1.5-3-6h6L1 1z" stroke="white" strokeWidth="1" />
+          </svg>
+          <span className="ml-3 rounded px-2 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: cursor.color }}>
+            {cursor.authorName}
+          </span>
+        </div>
+      ))}
+    </div>
   )
 }

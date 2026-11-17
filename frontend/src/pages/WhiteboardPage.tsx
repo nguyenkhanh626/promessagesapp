@@ -9,6 +9,7 @@ import {
   Minus,
   Pencil,
   RectangleHorizontal,
+  Redo2,
   Save,
   SlidersHorizontal,
   Trash2,
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react'
 import { WhiteboardCanvas, type WhiteboardTool } from '../components/whiteboard/WhiteboardCanvas'
 import { useAuth } from '../context/AuthContext'
-import { useWhiteboardWebSocket } from '../hooks/useWhiteboardWebSocket'
+import { useWhiteboardSync } from '../hooks/useWhiteboardSync'
 import { chatService } from '../services/chatService'
 import { whiteboardService } from '../services/whiteboardService'
 import type { Conversation } from '../types/chat'
@@ -25,17 +26,16 @@ import type { WhiteboardEvent, WhiteboardSession, WhiteboardShape } from '../typ
 import { applyWhiteboardEvent } from '../utils/whiteboard'
 
 const colors = [
-  { label: 'Đen', value: '#242424' },
-  { label: 'Trắng', value: '#ffffff' },
   { label: 'Tím Teams', value: '#5B5FC7' },
-  { label: 'Đỏ', value: '#C4314B' },
+  { label: 'Đen than', value: '#242424' },
+  { label: 'Đỏ tươi', value: '#D13438' },
   { label: 'Xanh lá', value: '#107C41' },
   { label: 'Xanh dương', value: '#0078D4' },
-  { label: 'Vàng', value: '#FFB900' },
+  { label: 'Cam', value: '#FF8C00' },
 ] as const
 
-const strokeWidths = [2, 4, 8, 12, 20] as const
-const fontSizes = [14, 18, 24, 32, 40] as const
+const strokeWidths = [2, 4, 8, 12] as const
+const fontSizes = [14, 18, 24, 36] as const
 
 const tools: { id: WhiteboardTool; label: string; icon: typeof Pencil }[] = [
   { id: 'PENCIL', label: 'Bút vẽ tự do', icon: Pencil },
@@ -51,13 +51,64 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Đã xảy ra lỗi khi tải bảng vẽ.'
 }
 
+function escapeXml(value: string) {
+  return value.replace(/[<>&'"]/g, (character) => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;',
+  })[character] || character)
+}
+
+function shapeToSvg(shape: WhiteboardShape) {
+  const [start, end] = shape.points
+  if (!start) return ''
+  const stroke = `stroke="${shape.strokeColor}" stroke-width="${shape.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`
+  const fill = shape.fillColor && shape.fillColor !== 'transparent' ? shape.fillColor : 'none'
+  if (shape.type === 'TEXT') {
+    const lines = (shape.text || '').split('\n')
+    return `<text x="${start.x}" y="${start.y}" fill="${shape.strokeColor}" font-family="sans-serif" font-size="${shape.fontSize || 20}" dominant-baseline="hanging">${lines.map((line, index) => `<tspan x="${start.x}" dy="${index === 0 ? 0 : (shape.fontSize || 20) * 1.25}">${escapeXml(line)}</tspan>`).join('')}</text>`
+  }
+  if (!end) return ''
+  if (shape.type === 'RECTANGLE') {
+    return `<rect x="${Math.min(start.x, end.x)}" y="${Math.min(start.y, end.y)}" width="${Math.abs(end.x - start.x)}" height="${Math.abs(end.y - start.y)}" ${stroke} fill="${fill}"/>`
+  }
+  if (shape.type === 'CIRCLE') {
+    return `<ellipse cx="${(start.x + end.x) / 2}" cy="${(start.y + end.y) / 2}" rx="${Math.abs(end.x - start.x) / 2}" ry="${Math.abs(end.y - start.y) / 2}" ${stroke} fill="${fill}"/>`
+  }
+  if (shape.type === 'LINE' || shape.type === 'ARROW') {
+    const angle = Math.atan2(end.y - start.y, end.x - start.x)
+    const arrowLength = Math.max(10, shape.strokeWidth * 3)
+    const arrowX1 = end.x - arrowLength * Math.cos(angle - Math.PI / 6)
+    const arrowY1 = end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    const arrowX2 = end.x - arrowLength * Math.cos(angle + Math.PI / 6)
+    const arrowY2 = end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    const arrow = shape.type === 'ARROW'
+      ? `<path d="M ${end.x} ${end.y} L ${arrowX1} ${arrowY1} M ${end.x} ${end.y} L ${arrowX2} ${arrowY2}" ${stroke} fill="none"/>`
+      : ''
+    return `<path d="M ${start.x} ${start.y} L ${end.x} ${end.y}" ${stroke} fill="none"/>${arrow}`
+  }
+  if (shape.points.length === 1) {
+    return `<circle cx="${start.x}" cy="${start.y}" r="${shape.strokeWidth / 2}" fill="${shape.strokeColor}"/>`
+  }
+  const path = shape.points.reduce((result, point, index, points) => {
+    if (index === 0) return `M ${point.x} ${point.y}`
+    if (index < points.length - 1) {
+      const next = points[index + 1]
+      return `${result} Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`
+    }
+    return `${result} L ${point.x} ${point.y}`
+  }, '')
+  return `<path d="${path}" ${stroke} fill="none"/>`
+}
+
 export function WhiteboardPage() {
   const { token, user } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [conversationId, setConversationId] = useState('')
   const [session, setSession] = useState<WhiteboardSession | null>(null)
   const [shapes, setShapes] = useState<WhiteboardShape[]>([])
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
   const [selectedColor, setSelectedColor] = useState<string>(colors[0].value)
+  const [selectedFill, setSelectedFill] = useState('transparent')
   const [widthIndex, setWidthIndex] = useState(1)
   const [fontIndex, setFontIndex] = useState(2)
   const [tool, setTool] = useState<WhiteboardTool>('PENCIL')
@@ -68,6 +119,11 @@ export function WhiteboardPage() {
   const [showClearDialog, setShowClearDialog] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const shapesRef = useRef<WhiteboardShape[]>([])
+  const dirtyRef = useRef(false)
+  const historyRef = useRef<WhiteboardShape[][]>([[]])
+  const historyIndexRef = useRef(0)
+  const sendEventRef = useRef<(event: WhiteboardEvent) => void>(() => {})
 
   useEffect(() => {
     let active = true
@@ -87,10 +143,43 @@ export function WhiteboardPage() {
     return () => { active = false }
   }, [])
 
-  const handleRemoteEvent = useCallback((event: WhiteboardEvent) => {
-    setShapes((current) => applyWhiteboardEvent(current, event))
+  const commitEvent = useCallback((event: WhiteboardEvent, broadcast: boolean, recordHistory = true) => {
+    if (event.action === 'CLEAR' && shapesRef.current.length === 0) return
+    if (event.action === 'RESTORE'
+      && JSON.stringify(shapesRef.current) === JSON.stringify(event.shapes)) return
+    const shapeAlreadyExists = event.action === 'DRAW'
+      && shapesRef.current.some((shape) => shape.id === event.shape.id)
+    const next = applyWhiteboardEvent(shapesRef.current, event)
+    shapesRef.current = next
+    setShapes(next)
+    dirtyRef.current = true
+    if (recordHistory) {
+      if (shapeAlreadyExists && event.action === 'DRAW') {
+        const history = [...historyRef.current]
+        history[historyIndexRef.current] = next
+        historyRef.current = history
+      } else {
+        const history = historyRef.current.slice(0, historyIndexRef.current + 1)
+        history.push(next)
+        if (history.length > 100) history.shift()
+        historyRef.current = history
+        historyIndexRef.current = history.length - 1
+      }
+      setCanUndo(historyIndexRef.current > 0)
+      setCanRedo(false)
+    }
+    if (broadcast) sendEventRef.current(event)
   }, [])
-  const { connectionState, sendEvent } = useWhiteboardWebSocket(session?.id ?? null, token, handleRemoteEvent)
+
+  const handleRemoteEvent = useCallback((event: WhiteboardEvent) => {
+    commitEvent(event, false)
+  }, [commitEvent])
+  const {
+    connectionState, cursors, sendEvent, sendCursor,
+  } = useWhiteboardSync(session?.id ?? null, token, user?.id ?? null, handleRemoteEvent)
+  useEffect(() => {
+    sendEventRef.current = sendEvent
+  }, [sendEvent])
 
   const openSession = async () => {
     if (!conversationId) return
@@ -102,8 +191,16 @@ export function WhiteboardPage() {
         conversationId,
         selectedConversation?.name || 'Bảng vẽ nhóm'
       )
+      const snapshot = await whiteboardService.getLatestSnapshot(opened.id)
+      const restoredShapes = snapshot.shapes || opened.shapes
       setSession(opened)
-      setShapes(opened.shapes)
+      shapesRef.current = restoredShapes
+      setShapes(restoredShapes)
+      historyRef.current = [restoredShapes]
+      historyIndexRef.current = 0
+      setCanUndo(false)
+      setCanRedo(false)
+      dirtyRef.current = false
       setSaveState('saved')
     } catch (error) {
       setErrorMessage(getErrorMessage(error))
@@ -112,32 +209,50 @@ export function WhiteboardPage() {
     }
   }
 
+  const saveSnapshot = useCallback(() => {
+    if (!session) return
+    const snapshot = shapesRef.current
+    setSaveState('saving')
+    saveQueueRef.current = saveQueueRef.current
+      .then(() => whiteboardService.saveSnapshot(session.id, snapshot))
+      .then(() => {
+        if (shapesRef.current === snapshot) dirtyRef.current = false
+        setSaveState('saved')
+      })
+      .catch((error: unknown) => {
+        setSaveState('error')
+        setErrorMessage(getErrorMessage(error))
+      })
+  }, [session])
+
   useEffect(() => {
     if (!session) return
-    const snapshot = shapes
-    const sessionId = session.id
-    const timer = window.setTimeout(() => {
-      setSaveState('saving')
-      saveQueueRef.current = saveQueueRef.current
-        .then(() => whiteboardService.saveSnapshot(sessionId, snapshot))
-        .then(() => setSaveState('saved'))
-        .catch((error: unknown) => {
-          setSaveState('error')
-          setErrorMessage(getErrorMessage(error))
-        })
-    }, 700)
-    return () => window.clearTimeout(timer)
-  }, [session, shapes])
+    const timer = window.setInterval(() => {
+      if (dirtyRef.current) saveSnapshot()
+    }, 30000)
+    return () => window.clearInterval(timer)
+  }, [saveSnapshot, session])
 
-  const handleLocalEvent = (event: WhiteboardEvent) => {
-    setShapes((current) => applyWhiteboardEvent(current, event))
-    sendEvent(event)
+  const undo = () => {
+    if (historyIndexRef.current <= 0) return
+    const nextIndex = historyIndexRef.current - 1
+    commitEvent({ action: 'RESTORE', shapes: historyRef.current[nextIndex] }, true, false)
+    historyIndexRef.current = nextIndex
+    setCanUndo(nextIndex > 0)
+    setCanRedo(true)
   }
 
-  const undoLastOwnShape = () => {
-    if (!user) return
-    const lastOwnShape = [...shapes].reverse().find((shape) => shape.authorId === user.id)
-    if (lastOwnShape) handleLocalEvent({ action: 'UNDO', shapeId: lastOwnShape.id })
+  const redo = () => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return
+    const nextIndex = historyIndexRef.current + 1
+    commitEvent({ action: 'RESTORE', shapes: historyRef.current[nextIndex] }, true, false)
+    historyIndexRef.current = nextIndex
+    setCanUndo(true)
+    setCanRedo(nextIndex < historyRef.current.length - 1)
+  }
+
+  const handleLocalEvent = (event: WhiteboardEvent) => {
+    commitEvent(event, true)
   }
 
   const clearBoard = () => {
@@ -148,8 +263,13 @@ export function WhiteboardPage() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        if (event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return
         event.preventDefault()
-        undoLastOwnShape()
+        if (event.shiftKey) redo()
+        else undo()
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        redo()
       }
       if (event.key === 'Escape') setShowClearDialog(false)
     }
@@ -165,16 +285,18 @@ export function WhiteboardPage() {
     link.click()
   }
 
-  const saveNow = () => {
-    if (!session) return
-    setSaveState('saving')
-    saveQueueRef.current = saveQueueRef.current
-      .then(() => whiteboardService.saveSnapshot(session.id, shapes))
-      .then(() => setSaveState('saved'))
-      .catch((error: unknown) => {
-        setSaveState('error')
-        setErrorMessage(getErrorMessage(error))
-      })
+  const exportSvg = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const { width, height } = canvas.getBoundingClientRect()
+    const content = shapes.map(shapeToSvg).join('')
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="white"/>${content}</svg>`
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+    const link = document.createElement('a')
+    link.download = 'whiteboard.svg'
+    link.href = url
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   const setCanvasElement = useCallback((canvas: HTMLCanvasElement | null) => {
@@ -192,7 +314,7 @@ export function WhiteboardPage() {
           <span className={`h-2 w-2 rounded-full ${connectionState === 'connected' ? 'bg-[#13a10e]' : 'bg-[#c8c6c4]'}`} />
           {connectionState === 'connected' ? 'Đang đồng bộ' : connectionState === 'connecting' ? 'Đang kết nối' : 'Chưa kết nối'}
           {session && (
-            <button type="button" onClick={saveNow} className="inline-flex items-center gap-1 rounded-md border border-[#d1d1d1] px-2.5 py-1.5 hover:bg-[#f5f5f5]">
+            <button type="button" onClick={saveSnapshot} className="inline-flex items-center gap-1 rounded-md border border-[#d1d1d1] px-2.5 py-1.5 hover:bg-[#f5f5f5]">
               {saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
               {saveState === 'saved' ? 'Đã lưu' : saveState === 'error' ? 'Lưu lại' : 'Lưu'}
             </button>
@@ -208,7 +330,13 @@ export function WhiteboardPage() {
             onChange={(event) => {
               setConversationId(event.target.value)
               setSession(null)
+              shapesRef.current = []
               setShapes([])
+              historyRef.current = [[]]
+              historyIndexRef.current = 0
+              setCanUndo(false)
+              setCanRedo(false)
+              dirtyRef.current = false
               setErrorMessage(null)
             }}
             disabled={loadingConversations || conversations.length === 0}
@@ -232,14 +360,20 @@ export function WhiteboardPage() {
         </button>
         {session && (
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={undoLastOwnShape} disabled={!shapes.some((shape) => shape.authorId === user?.id)} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác" className="grid h-9 w-9 place-items-center rounded-md border border-[#d1d1d1] hover:bg-white disabled:opacity-40">
+            <button type="button" onClick={undo} disabled={!canUndo} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác" className="grid h-9 w-9 place-items-center rounded-md border border-[#d1d1d1] hover:bg-white disabled:opacity-40">
               <Undo2 size={17} />
+            </button>
+            <button type="button" onClick={redo} disabled={!canRedo} title="Làm lại (Ctrl+Y)" aria-label="Làm lại" className="grid h-9 w-9 place-items-center rounded-md border border-[#d1d1d1] hover:bg-white disabled:opacity-40">
+              <Redo2 size={17} />
             </button>
             <button type="button" onClick={() => setShowClearDialog(true)} disabled={shapes.length === 0} title="Xóa toàn bộ" aria-label="Xóa toàn bộ bảng vẽ" className="grid h-9 w-9 place-items-center rounded-md border border-[#d1d1d1] hover:bg-white disabled:opacity-40">
               <Trash2 size={17} />
             </button>
             <button type="button" onClick={exportPng} title="Xuất ảnh PNG" aria-label="Xuất bảng vẽ ra ảnh PNG" className="grid h-9 w-9 place-items-center rounded-md border border-[#d1d1d1] hover:bg-white">
               <Download size={17} />
+            </button>
+            <button type="button" onClick={exportSvg} title="Xuất ảnh SVG" aria-label="Xuất bảng vẽ ra ảnh SVG" className="rounded-md border border-[#d1d1d1] px-2.5 text-xs hover:bg-white">
+              SVG
             </button>
           </div>
         )}
@@ -282,11 +416,23 @@ export function WhiteboardPage() {
                   style={{ backgroundColor: value }}
                   title={label}
                 >
-                  {selectedColor === value && <Check size={14} className={value === '#ffffff' || value === '#FFB900' ? 'text-[#242424]' : 'text-white'} />}
+                  {selectedColor === value && <Check size={14} className="text-white" />}
                 </button>
               ))}
             </div>
           </fieldset>
+          <label className="flex items-center gap-2 text-sm text-[#616161]">
+            Màu tô
+            <select
+              value={selectedFill}
+              onChange={(event) => setSelectedFill(event.target.value)}
+              aria-label="Màu tô nền hình"
+              className="rounded border border-[#c8c6c4] bg-white px-2 py-1"
+            >
+              <option value="transparent">Trong suốt</option>
+              {colors.map(({ label, value }) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
           <span className="hidden h-7 w-px bg-[#d1d1d1] sm:block" />
           <label className="flex min-w-[180px] flex-1 items-center gap-2 sm:flex-none">
             <SlidersHorizontal size={16} className="text-[#616161]" aria-hidden="true" />
@@ -319,9 +465,14 @@ export function WhiteboardPage() {
             fontSize={fontSizes[fontIndex]}
             tool={tool}
             shapes={shapes}
+            cursors={cursors}
             onLocalEvent={handleLocalEvent}
+            onPreviewShape={(shape) => sendEvent({ action: 'DRAW', shape })}
+            onCursorMove={sendCursor}
             authorId={user.id}
+            authorName={user.displayName}
             onCanvasReady={setCanvasElement}
+            fillColor={selectedFill}
           />
         ) : (
           <div className="grid h-full min-h-[360px] place-items-center px-6 text-center text-sm text-[#616161]">

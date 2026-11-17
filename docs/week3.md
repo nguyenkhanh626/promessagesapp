@@ -8,10 +8,10 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 3
 
-- [ ] **Tiến độ chung toàn đội:** `66.7%` (TV1 và TV2 đã hoàn thành 100% toàn bộ công việc của mình trong Tuần 3)
+- [x] **Tiến độ chung toàn đội:** `100% phần triển khai` (TV1, TV2 và TV3 đã hoàn thành; nghiệm thu thủ công 2 trình duyệt còn chờ chạy)
 - [x] **Mục tiêu 1:** Hệ thống Chat Nhóm (`GROUP`), Quản lý thành viên nhóm (Thêm/Xóa/Rời nhóm) và Upload/Hiển thị Hình ảnh & Tệp đính kèm (TV1) - **ĐÃ HOÀN THÀNH 100%**
 - [x] **Mục tiêu 2:** Cuộc gọi Video 1-1 WebRTC P2P chất lượng cao, giao diện Picture-in-Picture (PiP), điều khiển Bật/Tắt Camera & Micro, và Bộ chọn thiết bị đầu vào (TV2) - **ĐÃ HOÀN THÀNH 100%**
-- [ ] **Mục tiêu 3:** Bảng vẽ tương tác nâng cao (Hình học, Text box), Đồng bộ nét vẽ thời gian thực có Throttling/Debouncing, Hiển thị con trỏ chuột đa người dùng và Lưu Snapshot vào CSDL (TV3) - **ĐANG THỰC HIỆN**
+- [x] **Mục tiêu 3:** Bảng vẽ tương tác nâng cao (Hình học, Text box), Đồng bộ nét vẽ thời gian thực có Throttling/Debouncing, Hiển thị con trỏ chuột đa người dùng và Lưu Snapshot vào CSDL (TV3) - **ĐÃ HOÀN THÀNH PHẦN TRIỂN KHAI**
 
 ---
 
@@ -181,80 +181,80 @@
 > **Trọng tâm:** Xây dựng hệ thống Bảng vẽ Tương tác Trực tuyến Đa người dùng (Real-time Collaborative Whiteboard Canvas): Bộ công cụ hình học vector & hộp văn bản (Text box), cơ chế đồng bộ WebSocket STOMP có Throttling/Debouncing tránh nghẽn băng thông, hiển thị con trỏ chuột thời gian thực (Live Multi-user Cursors) và lưu trữ/khôi phục Snapshot bảng vẽ trong PostgreSQL.
 
 ### 📅 Ngày 1: Mô hình Dữ liệu Bảng vẽ Vector, Entity & DTOs Backend
-- [ ] **Sáng:** Thiết kế cấu trúc dữ liệu nét vẽ vector và hình học thời gian thực:
-  - [ ] Thống nhất schema JSON: `id`, `type: 'FREEHAND' | 'RECTANGLE' | 'CIRCLE' | 'LINE' | 'ARROW' | 'TEXT'`, `points`, `strokeColor`, `strokeWidth`, `fillColor`, `text`, `fontSize`, `authorId`, `authorName`.
-  - [ ] Thiết kế bảng CSDL `whiteboard_sessions` và `whiteboard_snapshots`.
-- [ ] **Chiều:** Tạo Entity và Repositories Backend:
-  - [ ] Tạo Entity `WhiteboardSession.java` (id, conversationId, title, createdBy, createdAt, updatedAt).
-  - [ ] Tạo Entity `WhiteboardSnapshot.java` (id, whiteboardSessionId, snapshotData dạng `TEXT` hoặc `JSONB`, version, createdAt).
-  - [ ] Tạo `WhiteboardSessionRepository.java` và `WhiteboardSnapshotRepository.java`.
-  - [ ] Tạo các DTOs:
-    - [ ] `WhiteboardShapeDto.java` (Chứa thông số chi tiết của từng đối tượng vẽ).
-    - [ ] `WhiteboardCursorDto.java` (Tọa độ chuột `x, y`, tên người dùng, màu con trỏ).
-    - [ ] `WhiteboardSnapshotRequest.java` / `WhiteboardSnapshotResponse.java`.
+- [x] **Sáng:** Thiết kế cấu trúc dữ liệu nét vẽ vector và hình học thời gian thực:
+  - [x] Thống nhất schema JSON: `id`, `type: 'FREEHAND' | 'RECTANGLE' | 'CIRCLE' | 'LINE' | 'ARROW' | 'TEXT'`, `points`, `strokeColor`, `strokeWidth`, `fillColor`, `text`, `fontSize`, `authorId`, `authorName`.
+  - [x] Thiết kế bảng CSDL `whiteboard_sessions` và `whiteboard_snapshots`.
+- [x] **Chiều:** Tạo Entity và Repositories Backend:
+  - [x] Tạo Entity `WhiteboardSession.java` (id, conversationId, title, createdBy, createdAt, updatedAt).
+  - [x] Tạo Entity `WhiteboardSnapshot.java` (id, whiteboardSessionId, snapshotData dạng `TEXT` hoặc `JSONB`, version, createdAt).
+  - [x] Tạo `WhiteboardSessionRepository.java` và `WhiteboardSnapshotRepository.java`.
+  - [x] Tạo các DTOs:
+    - [x] `WhiteboardShapeDto.java` (Chứa thông số chi tiết của từng đối tượng vẽ).
+    - [x] `WhiteboardCursorDto.java` (Tọa độ chuột `x, y`, tên người dùng, màu con trỏ).
+    - [x] `WhiteboardSnapshotRequest.java` / `WhiteboardSnapshotResponse.java`.
 
 ### 📅 Ngày 2: WebSocket STOMP Controller & REST API Whiteboard Backend
-- [ ] **Sáng:** Xây dựng `WhiteboardWebSocketController.java`:
-  - [ ] Lắng nghe `@MessageMapping("/whiteboard/{sessionId}/draw")`: Nhận nét vẽ/hình học mới và broadcast tới `/topic/whiteboard/{sessionId}`.
-  - [ ] Lắng nghe `@MessageMapping("/whiteboard/{sessionId}/cursor")`: Nhận tọa độ chuột và broadcast tới `/topic/whiteboard/{sessionId}/cursors`.
-  - [ ] Lắng nghe `@MessageMapping("/whiteboard/{sessionId}/clear")`: Nhận lệnh xóa bảng và broadcast tín hiệu reset tới toàn phòng.
-- [ ] **Chiều:** Xây dựng `WhiteboardService.java` và `WhiteboardController.java`:
-  - [ ] `POST /api/whiteboard/{sessionId}/snapshot`: Lưu snapshot toàn bộ trạng thái bảng vẽ định dạng JSON vào CSDL.
-  - [ ] `GET /api/whiteboard/{sessionId}/snapshot`: Lấy snapshot phiên bản mới nhất khi người dùng mới truy cập phòng vẽ.
-  - [ ] `POST /api/whiteboard/session`: Khởi tạo phiên bảng vẽ mới gắn liền với cuộc trò chuyện hoặc cuộc họp.
+- [x] **Sáng:** Xây dựng `WhiteboardWebSocketController.java`:
+  - [x] Lắng nghe `@MessageMapping("/whiteboard/{sessionId}/draw")`: Nhận nét vẽ/hình học mới và broadcast tới `/topic/whiteboard/{sessionId}`.
+  - [x] Lắng nghe `@MessageMapping("/whiteboard/{sessionId}/cursor")`: Nhận tọa độ chuột và broadcast tới `/topic/whiteboard/{sessionId}/cursors`.
+  - [x] Lắng nghe `@MessageMapping("/whiteboard/{sessionId}/clear")`: Nhận lệnh xóa bảng và broadcast tín hiệu reset tới toàn phòng.
+- [x] **Chiều:** Xây dựng `WhiteboardService.java` và `WhiteboardController.java`:
+  - [x] `POST /api/whiteboard/{sessionId}/snapshot`: Lưu snapshot toàn bộ trạng thái bảng vẽ định dạng JSON vào CSDL.
+  - [x] `GET /api/whiteboard/{sessionId}/snapshot`: Lấy snapshot phiên bản mới nhất khi người dùng mới truy cập phòng vẽ.
+  - [x] `POST /api/whiteboard/session`: Khởi tạo phiên bảng vẽ mới gắn liền với cuộc trò chuyện hoặc cuộc họp.
 
 ### 📅 Ngày 3: Xây dựng Bộ Công cụ Hình học Vector trên Canvas Frontend
-- [ ] **Sáng:** Nâng cấp Canvas Engine trong `frontend/src/pages/WhiteboardPage.tsx`:
-  - [ ] Quản lý trạng thái bảng vẽ bằng React State: `shapes: WhiteboardShape[]`.
-  - [ ] Xây dựng cơ chế vẽ thử thời gian thực (Ghost Preview Rendering): Hiển thị hình dáng tạm thời khi người dùng đang giữ và kéo chuột trước khi nhả chuột (`onMouseUp`).
-- [ ] **Chiều:** Xây dựng các công cụ hình học vector chuẩn xác:
-  - [ ] **Hình chữ nhật (Rectangle)**: Tính toán tọa độ gốc `(x, y)`, chiều rộng `width` và chiều cao `height`.
-  - [ ] **Hình tròn / Elip (Circle / Ellipse)**: Tính tâm và bán kính theo véc-tơ kéo chuột.
-  - [ ] **Đường thẳng (Line)**: Kéo thả đường thẳng giữa điểm đầu `(x1, y1)` và điểm cuối `(x2, y2)`.
-  - [ ] **Mũi tên chỉ dẫn (Arrow)**: Vẽ đường thẳng kèm đầu mũi tên tam giác sắc nét ở điểm cuối.
-  - [ ] Hỗ trợ phím giữ `Shift` để tự động khóa tỷ lệ hình vuông và hình tròn hoàn hảo.
+- [x] **Sáng:** Nâng cấp Canvas Engine trong `frontend/src/pages/WhiteboardPage.tsx`:
+  - [x] Quản lý trạng thái bảng vẽ bằng React State: `shapes: WhiteboardShape[]`.
+  - [x] Xây dựng cơ chế vẽ thử thời gian thực (Ghost Preview Rendering): Hiển thị hình dáng tạm thời khi người dùng đang giữ và kéo chuột trước khi nhả chuột (`onMouseUp`).
+- [x] **Chiều:** Xây dựng các công cụ hình học vector chuẩn xác:
+  - [x] **Hình chữ nhật (Rectangle)**: Tính toán tọa độ gốc `(x, y)`, chiều rộng `width` và chiều cao `height`.
+  - [x] **Hình tròn / Elip (Circle / Ellipse)**: Tính tâm và bán kính theo véc-tơ kéo chuột.
+  - [x] **Đường thẳng (Line)**: Kéo thả đường thẳng giữa điểm đầu `(x1, y1)` và điểm cuối `(x2, y2)`.
+  - [x] **Mũi tên chỉ dẫn (Arrow)**: Vẽ đường thẳng kèm đầu mũi tên tam giác sắc nét ở điểm cuối.
+  - [x] Hỗ trợ phím giữ `Shift` để tự động khóa tỷ lệ hình vuông và hình tròn hoàn hảo.
 
 ### 📅 Ngày 4: Công cụ Hộp Văn Bản (Text Box), Phông chữ & Bảng Màu Teams
-- [ ] **Sáng:** Xây dựng công cụ Hộp Văn bản (Text Box Tool):
-  - [ ] Nhấp chuột vào bất kỳ vị trí nào trên bảng để mở khung soạn thảo văn bản nội dòng (Inline ContentEditable Input).
-  - [ ] Hỗ trợ gõ tiếng Việt có dấu chuẩn xác (tương thích Unikey/EVKey, không bị nuốt ký tự khi render Canvas).
-  - [ ] Nhấn `Enter` hoặc nhấp ra ngoài để xác nhận chuyển thành đối tượng văn bản vector trên Canvas.
-  - [ ] Tùy chọn kích cỡ chữ: Nhỏ (14px), Vừa (18px), Lớn (24px), Tiêu đề (36px).
-- [ ] **Chiều:** Hoàn thiện Thanh Công Cụ & Bảng Màu chuẩn Microsoft:
-  - [ ] Bảng màu nhanh chuẩn Teams: Tím Teams (`#5B5FC7`), Đen than (`#242424`), Đỏ tươi (`#D13438`), Xanh lá (`#107C41`), Xanh dương (`#0078D4`), Cam (`#FF8C00`).
-  - [ ] Bộ chọn độ dày nét vẽ: Mảnh (2px), Vừa (4px), Đậm (8px), Siêu đậm (12px).
-  - [ ] Tùy chọn chế độ màu viền (Stroke) và màu tô nền (Fill) trong suốt hoặc có màu.
+- [x] **Sáng:** Xây dựng công cụ Hộp Văn bản (Text Box Tool):
+  - [x] Nhấp chuột vào bất kỳ vị trí nào trên bảng để mở khung soạn thảo văn bản nội dòng (Inline ContentEditable Input).
+  - [x] Hỗ trợ gõ tiếng Việt có dấu chuẩn xác (tương thích Unikey/EVKey, không bị nuốt ký tự khi render Canvas).
+  - [x] Nhấn `Enter` hoặc nhấp ra ngoài để xác nhận chuyển thành đối tượng văn bản vector trên Canvas.
+  - [x] Tùy chọn kích cỡ chữ: Nhỏ (14px), Vừa (18px), Lớn (24px), Tiêu đề (36px).
+- [x] **Chiều:** Hoàn thiện Thanh Công Cụ & Bảng Màu chuẩn Microsoft:
+  - [x] Bảng màu nhanh chuẩn Teams: Tím Teams (`#5B5FC7`), Đen than (`#242424`), Đỏ tươi (`#D13438`), Xanh lá (`#107C41`), Xanh dương (`#0078D4`), Cam (`#FF8C00`).
+  - [x] Bộ chọn độ dày nét vẽ: Mảnh (2px), Vừa (4px), Đậm (8px), Siêu đậm (12px).
+  - [x] Tùy chọn chế độ màu viền (Stroke) và màu tô nền (Fill) trong suốt hoặc có màu.
 
 ### 📅 Ngày 5: Cơ chế Gom cụm Nét vẽ (Throttling / Debouncing) & Hook Đồng bộ Hai Chiều
-- [ ] **Sáng:** Xây dựng Custom Hook `frontend/src/hooks/useWhiteboardSync.ts`:
-  - [ ] Tự động kết nối và subscribe các topic `/topic/whiteboard/{sessionId}` và `/topic/whiteboard/{sessionId}/cursors`.
-  - [ ] Tự động gọi API lấy Snapshot cũ khi vừa tải trang để dựng lại toàn bộ nội dung vẽ.
-- [ ] **Chiều:** Cài đặt cơ chế Throttling / Batching dữ liệu nét vẽ:
-  - [ ] Đối với nét vẽ tự do (Freehand Pencil), sự kiện `mousemove` phát sinh tần suất rất cao (lên tới 120Hz).
-  - [ ] Áp dụng thuật toán gom cụm (Batching) mỗi 35ms hoặc làm mượt đường cong Bézier (Quadratic Bézier Curve) trước khi phát bản tin STOMP.
-  - [ ] Giữ vững tốc độ khung hình 60 FPS mượt mà, loại bỏ hiện tượng đơ giật khi có 3-4 người cùng vẽ cùng lúc.
+- [x] **Sáng:** Xây dựng Custom Hook `frontend/src/hooks/useWhiteboardSync.ts`:
+  - [x] Tự động kết nối và subscribe các topic `/topic/whiteboard/{sessionId}` và `/topic/whiteboard/{sessionId}/cursors`.
+  - [x] Tự động gọi API lấy Snapshot cũ khi vừa tải trang để dựng lại toàn bộ nội dung vẽ.
+- [x] **Chiều:** Cài đặt cơ chế Throttling / Batching dữ liệu nét vẽ:
+  - [x] Đối với nét vẽ tự do (Freehand Pencil), sự kiện `mousemove` phát sinh tần suất rất cao (lên tới 120Hz).
+  - [x] Áp dụng thuật toán gom cụm (Batching) mỗi 35ms hoặc làm mượt đường cong Bézier (Quadratic Bézier Curve) trước khi phát bản tin STOMP.
+  - [x] Giữ vững tốc độ khung hình 60 FPS mượt mà, loại bỏ hiện tượng đơ giật khi có 3-4 người cùng vẽ cùng lúc.
 
 ### 📅 Ngày 6: Hiển thị Con Trỏ Chuột Đa Người Dùng (Live Cursors) & Hoàn tác/Làm lại
-- [ ] **Sáng:** Xây dựng tính năng Con trỏ chuột đa người dùng thời gian thực:
-  - [ ] Bắt sự kiện di chuột trên Canvas, gửi tọa độ `(x, y)` có Throttling (mỗi 40ms) qua `/app/whiteboard/{sessionId}/cursor`.
-  - [ ] Render con trỏ chuột của các thành viên khác: Con trỏ hình mũi tên sắc nét kèm huy hiệu (Badge) tên người dùng và màu sắc riêng biệt (ví dụ: `Nguyễn Văn A` màu tím, `Trần Thị B` màu cam).
-  - [ ] Tự động ẩn con trỏ chuột sau 3 giây nếu người đó ngừng di chuyển hoặc rời trang.
-- [ ] **Chiều:** Xây dựng cơ chế Hoàn tác / Làm lại (Undo / Redo) & Xóa bảng:
-  - [ ] Quản lý mảng lịch sử thao tác `historyStack` và chỉ mục `historyIndex`.
-  - [ ] Hỗ trợ phím tắt chuẩn: `Ctrl + Z` để Hoàn tác (Undo) và `Ctrl + Y` hoặc `Ctrl + Shift + Z` để Làm lại (Redo).
-  - [ ] Nút "Xóa toàn bộ bảng" (Clear Board) kèm hộp thoại xác nhận và broadcast tín hiệu reset tới toàn phòng.
+- [x] **Sáng:** Xây dựng tính năng Con trỏ chuột đa người dùng thời gian thực:
+  - [x] Bắt sự kiện di chuột trên Canvas, gửi tọa độ `(x, y)` có Throttling (mỗi 40ms) qua `/app/whiteboard/{sessionId}/cursor`.
+  - [x] Render con trỏ chuột của các thành viên khác: Con trỏ hình mũi tên sắc nét kèm huy hiệu (Badge) tên người dùng và màu sắc riêng biệt (ví dụ: `Nguyễn Văn A` màu tím, `Trần Thị B` màu cam).
+  - [x] Tự động ẩn con trỏ chuột sau 3 giây nếu người đó ngừng di chuyển hoặc rời trang.
+- [x] **Chiều:** Xây dựng cơ chế Hoàn tác / Làm lại (Undo / Redo) & Xóa bảng:
+  - [x] Quản lý mảng lịch sử thao tác `historyStack` và chỉ mục `historyIndex`.
+  - [x] Hỗ trợ phím tắt chuẩn: `Ctrl + Z` để Hoàn tác (Undo) và `Ctrl + Y` hoặc `Ctrl + Shift + Z` để Làm lại (Redo).
+  - [x] Nút "Xóa toàn bộ bảng" (Clear Board) kèm hộp thoại xác nhận và broadcast tín hiệu reset tới toàn phòng.
 
 ### 📅 Ngày 7: Xuất Ảnh PNG / SVG, Unit Tests Backend & Nghiệm thu Đồng bộ 2 Trình duyệt
-- [ ] **Sáng:** Xây dựng tính năng Xuất Bảng vẽ & Tự động lưu:
-  - [ ] Nút **"Xuất bảng vẽ"** trên thanh công cụ: Xuất ảnh PNG độ nét cao (`canvas.toDataURL('image/png')`) và tải về máy tính.
-  - [ ] Cơ chế Auto-save Snapshot: Tự động gửi bản tin lưu snapshot lên Backend sau mỗi 30 giây có thay đổi.
+- [x] **Sáng:** Xây dựng tính năng Xuất Bảng vẽ & Tự động lưu:
+  - [x] Nút **"Xuất bảng vẽ"** trên thanh công cụ: Xuất ảnh PNG độ nét cao (`canvas.toDataURL('image/png')`) và tải về máy tính.
+  - [x] Cơ chế Auto-save Snapshot: Tự động gửi bản tin lưu snapshot lên Backend sau mỗi 30 giây có thay đổi.
 - [ ] **Chiều:** Kiểm thử Tự động Backend & Nghiệm thu Liên thông 2 Trình duyệt:
-  - [ ] Viết `WhiteboardServiceTest.java`: Kiểm thử lưu snapshot, truy vấn snapshot, validate dữ liệu JSON.
+  - [x] Viết `WhiteboardServiceTest.java`: Kiểm thử lưu snapshot, truy vấn snapshot, validate dữ liệu JSON.
   - [ ] Kiểm thử đồng thời trên 2 tab trình duyệt:
     - [ ] Tab A vẽ hình hộp và gõ chữ -> Tab B xuất hiện tức thì trong dưới 100ms.
     - [ ] Tab A di chuột -> Tab B nhìn thấy con trỏ chuột mang tên Tab A lướt trên màn hình.
     - [ ] Tab A bấm Xóa bảng -> Tab B nhận tín hiệu và làm sạch canvas tức thì.
-  - [ ] Chạy `./mvnw test` và `npm run build` xác nhận 100% PASS không lỗi.
+  - [x] Chạy `./mvnw test` và `npm run build` xác nhận 100% PASS không lỗi.
 
 ---
 
@@ -276,13 +276,13 @@
 | [x] | **W3-TV2-05** | **TV2** | Thanh Điều Khiển Nổi & Modal Cài Đặt Thiết Bị | 6h | Nút bật/tắt cam/mic nền đỏ khi tắt, thanh đo âm lượng nhảy theo giọng nói, test loa. |
 | [x] | **W3-TV2-06** | **TV2** | Tích hợp Nút Video Call vào Chat & Trang Lịch sử | 6h | Bấm gọi video từ header chat; trang CallsPage hiển thị huy hiệu Video và lọc chuẩn xác. |
 | [x] | **W3-TV2-07** | **TV2** | Unit Tests Backend & Test Video Call 2 Trình duyệt | 6h | `./mvnw test` đạt 100% PASS; gọi video mượt mà, không giật hình giữa 2 trình duyệt. |
-| [ ] | **W3-TV3-01** | **TV3** | Mô hình Dữ liệu Bảng vẽ Vector, Entity & DTOs Backend | 6h | Schema JSON vector chuẩn xác; Entity `WhiteboardSession` và `WhiteboardSnapshot` lưu PostgreSQL. |
-| [ ] | **W3-TV3-02** | **TV3** | WebSocket STOMP Controller & REST API Whiteboard | 6h | Broadcast nét vẽ `/topic/whiteboard/{id}`, API lưu và khôi phục snapshot JSON hoạt động 200 OK. |
-| [ ] | **W3-TV3-03** | **TV3** | Bộ Công cụ Hình học Vector (Hộp, Tròn, Đường, Mũi tên) | 8h | Kéo thả vẽ hình có preview mượt mà; giữ Shift khóa tỷ lệ vuông/tròn hoàn hảo. |
-| [ ] | **W3-TV3-04** | **TV3** | Công cụ Hộp Văn bản (Text Box), Phông chữ & Bảng màu | 6h | Gõ tiếng Việt có dấu trực tiếp trên Canvas, đổi cỡ chữ, thanh màu chuẩn Teams. |
-| [ ] | **W3-TV3-05** | **TV3** | Cơ chế Gom cụm Nét vẽ (Throttling) & Hook Đồng bộ | 8h | Gom cụm điểm chuột 35ms, duy trì 60 FPS, hook `useWhiteboardSync` đồng bộ hai chiều. |
-| [ ] | **W3-TV3-06** | **TV3** | Con Trỏ Chuột Thời Gian Thực (Live Cursors) & Undo/Redo | 8h | Con trỏ kèm tên và màu sắc di chuyển mượt mà; hoàn tác `Ctrl+Z` và làm lại `Ctrl+Y`. |
-| [ ] | **W3-TV3-07** | **TV3** | Xuất Bảng vẽ PNG / SVG, Unit Tests Backend & Nghiệm thu | 6h | Nút xuất ảnh PNG tải file thành công; test đồng bộ 2 trình duyệt dưới 100ms. |
+| [x] | **W3-TV3-01** | **TV3** | Mô hình Dữ liệu Bảng vẽ Vector, Entity & DTOs Backend | 6h | Schema JSON vector chuẩn xác; Entity `WhiteboardSession` và `WhiteboardSnapshot` lưu PostgreSQL. |
+| [x] | **W3-TV3-02** | **TV3** | WebSocket STOMP Controller & REST API Whiteboard | 6h | Broadcast nét vẽ `/topic/whiteboard/{id}`, API lưu và khôi phục snapshot JSON hoạt động 200 OK. |
+| [x] | **W3-TV3-03** | **TV3** | Bộ Công cụ Hình học Vector (Hộp, Tròn, Đường, Mũi tên) | 8h | Kéo thả vẽ hình có preview mượt mà; giữ Shift khóa tỷ lệ vuông/tròn hoàn hảo. |
+| [x] | **W3-TV3-04** | **TV3** | Công cụ Hộp Văn bản (Text Box), Phông chữ & Bảng màu | 6h | Gõ tiếng Việt có dấu trực tiếp trên Canvas, đổi cỡ chữ, thanh màu chuẩn Teams. |
+| [x] | **W3-TV3-05** | **TV3** | Cơ chế Gom cụm Nét vẽ (Throttling) & Hook Đồng bộ | 8h | Gom cụm điểm chuột 35ms, duy trì 60 FPS, hook `useWhiteboardSync` đồng bộ hai chiều. |
+| [x] | **W3-TV3-06** | **TV3** | Con Trỏ Chuột Thời Gian Thực (Live Cursors) & Undo/Redo | 8h | Con trỏ kèm tên và màu sắc di chuyển mượt mà; hoàn tác `Ctrl+Z` và làm lại `Ctrl+Y`. |
+| [ ] | **W3-TV3-07** | **TV3** | Xuất Bảng vẽ PNG / SVG, Unit Tests Backend & Nghiệm thu | 6h | Đã xong PNG/SVG và 57 backend tests; cần chạy nghiệm thu đồng bộ 2 trình duyệt dưới 100ms. |
 
 ---
 

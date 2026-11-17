@@ -4,7 +4,9 @@ import com.team17.chatapp.auth.entity.User;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.exception.AppException;
 import com.team17.chatapp.whiteboard.dto.WhiteboardEvent;
+import com.team17.chatapp.whiteboard.dto.WhiteboardCursorDto;
 import com.team17.chatapp.whiteboard.entity.WhiteboardData;
+import com.team17.chatapp.whiteboard.dto.WhiteboardShapeDto;
 import com.team17.chatapp.whiteboard.service.WhiteboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,14 +47,44 @@ public class WhiteboardWebSocketController {
             var shape = event.shape();
             trustedEvent = new WhiteboardEvent(
                     event.action(),
-                    new WhiteboardData(
+                    new WhiteboardShapeDto(
                             shape.id(), shape.type(), shape.points(), shape.strokeColor(), shape.strokeWidth(),
-                            user.getId(), shape.text(), shape.fontSize()),
+                            user.getId(), user.getDisplayName(), shape.text(), shape.fontSize(), shape.fillColor()),
+                    event.shapes(),
                     event.shapeId(),
                     event.point(),
                     event.eraserSize());
         }
         messagingTemplate.convertAndSend("/topic/whiteboard/" + sessionId, trustedEvent);
+    }
+
+    @MessageMapping("/whiteboard/{sessionId}/clear")
+    public void handleClear(@DestinationVariable UUID sessionId, Principal principal) {
+        User user = getAuthenticatedUser(principal);
+        whiteboardService.requireSessionMember(sessionId, user.getId());
+        messagingTemplate.convertAndSend(
+                "/topic/whiteboard/" + sessionId,
+                new WhiteboardEvent(WhiteboardEvent.Action.CLEAR, null, null, null, null, 0));
+    }
+
+    @MessageMapping("/whiteboard/{sessionId}/cursor")
+    public void handleCursor(
+            @DestinationVariable UUID sessionId,
+            @Payload WhiteboardCursorDto cursor,
+            Principal principal) {
+        if (principal == null || principal.getName() == null) {
+            throw new AppException("Cần đăng nhập để chia sẻ con trỏ", HttpStatus.UNAUTHORIZED);
+        }
+        User user = userRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new AppException("Người dùng không tồn tại", HttpStatus.UNAUTHORIZED));
+        whiteboardService.requireSessionMember(sessionId, user.getId());
+        if (cursor == null || cursor.point() == null || !cursor.point().isValid()) {
+            throw new AppException("Vị trí con trỏ không hợp lệ", HttpStatus.BAD_REQUEST);
+        }
+        String color = String.format("#%06X", (user.getId().hashCode() & 0xFFFFFF));
+        messagingTemplate.convertAndSend(
+                "/topic/whiteboard/" + sessionId + "/cursors",
+                new WhiteboardCursorDto(user.getId(), cursor.point(), user.getDisplayName(), color));
     }
 
     private void validateEvent(WhiteboardEvent event) {
@@ -77,6 +109,14 @@ public class WhiteboardWebSocketController {
                     throw new AppException("Không tìm thấy nét cần hoàn tác", HttpStatus.BAD_REQUEST);
                 }
             }
+            case RESTORE -> {
+                if (event.shapes() == null || event.shapes().size() > 10000
+                        || event.shapes().stream().anyMatch(shape -> shape == null || !shape.isValid())
+                        || event.shapes().stream().filter(shape -> shape.points() != null)
+                        .mapToLong(shape -> shape.points().size()).sum() > 100000) {
+                    throw new AppException("Lịch sử bảng vẽ không hợp lệ", HttpStatus.BAD_REQUEST);
+                }
+            }
             case MOVE -> {
                 if (event.shapeId() == null || event.point() == null || !event.point().isValid()) {
                     throw new AppException("Vị trí văn bản không hợp lệ", HttpStatus.BAD_REQUEST);
@@ -85,5 +125,13 @@ public class WhiteboardWebSocketController {
             case CLEAR -> {
             }
         }
+    }
+
+    private User getAuthenticatedUser(Principal principal) {
+        if (principal == null || principal.getName() == null) {
+            throw new AppException("Cần đăng nhập để vẽ trên bảng", HttpStatus.UNAUTHORIZED);
+        }
+        return userRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new AppException("Người dùng không tồn tại", HttpStatus.UNAUTHORIZED));
     }
 }

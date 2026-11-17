@@ -2,11 +2,13 @@ package com.team17.chatapp.whiteboard.dto;
 
 import com.team17.chatapp.whiteboard.entity.WhiteboardData;
 
+import java.util.List;
 import java.util.UUID;
 
 public record WhiteboardEvent(
         Action action,
-        WhiteboardData shape,
+        WhiteboardShapeDto shape,
+        List<WhiteboardShapeDto> shapes,
         UUID shapeId,
         WhiteboardData.Point point,
         double eraserSize) {
@@ -16,6 +18,7 @@ public record WhiteboardEvent(
         ERASE,
         CLEAR,
         UNDO,
+        RESTORE,
         MOVE
     }
 }
