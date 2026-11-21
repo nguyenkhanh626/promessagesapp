@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   Download,
+  Bot,
   FileText,
   Image as ImageIcon,
   MessageSquare,
@@ -9,6 +10,7 @@ import {
   Phone,
   Search,
   Send,
+  Sparkles,
   Smile,
   Users,
   Video,
@@ -18,8 +20,17 @@ import type { Conversation, Message, TypingEvent, UserPresenceStatus } from '../
 import type { User } from '../../types/auth'
 import { useCall } from '../../context/CallContext'
 import { apiClient } from '../../services/apiClient'
+import { aiService } from '../../services/aiService'
 import { chatService } from '../../services/chatService'
 import { STATUS_CONFIG } from './UserDirectoryModal'
+import { AiMessageContent } from './AiMessageContent'
+
+interface AiChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  streaming?: boolean
+}
 
 interface ChatWindowProps {
   conversation: Conversation | null
@@ -48,6 +59,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
+  const [aiMessages, setAiMessages] = useState<AiChatMessage[]>([])
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [isAiSending, setIsAiSending] = useState(false)
 
   // Trạng thái tìm kiếm tin nhắn trong hội thoại
   const [showMessageSearch, setShowMessageSearch] = useState(false)
@@ -62,6 +76,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const imageInputRef = useRef<HTMLInputElement>(null)
   const typingTimeoutRef = useRef<any>(null)
   const isTypingSentRef = useRef<boolean>(false)
+  const aiRequestRef = useRef<AbortController | null>(null)
   const { startCall, joinGroupCall, callStatus } = useCall()
 
   // Kiểm tra phòng họp nhóm có đang diễn ra không
@@ -109,6 +124,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [messages])
 
   useEffect(() => {
+    scrollToBottom()
+  }, [aiMessages])
+
+  useEffect(() => {
+    aiRequestRef.current?.abort()
+    aiRequestRef.current = null
+    setAiMessages([])
+    setAiError(null)
+    setIsAiSending(false)
     setSelectedFile(null)
     setFilePreviewUrl(null)
     setInputText('')
@@ -118,6 +142,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setHighlightedMessageId(null)
     isTypingSentRef.current = false
   }, [conversation?.id])
+
+  useEffect(() => () => aiRequestRef.current?.abort(), [])
 
   const emitTyping = (typing: boolean) => {
     if (!onTypingChange) return
@@ -212,6 +238,49 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     const textToSend = inputText.trim()
     const fileToSend = selectedFile
+
+    if (!fileToSend && /^@AI-Assistant\b/i.test(textToSend)) {
+      const question = textToSend.replace(/^@AI-Assistant\b\s*/i, '').trim()
+      if (!question || !conversation || isAiSending) return
+      setInputText('')
+      setAiError(null)
+      setIsAiSending(true)
+      const requestId = crypto.randomUUID()
+      const answerId = crypto.randomUUID()
+      setAiMessages((current) => [
+        ...current,
+        { id: requestId, role: 'user', text: question },
+        { id: answerId, role: 'assistant', text: '', streaming: true },
+      ])
+      const controller = new AbortController()
+      aiRequestRef.current?.abort()
+      aiRequestRef.current = controller
+      try {
+        await aiService.streamChat(
+          { conversationId: conversation.id, prompt: question },
+          (chunk) => setAiMessages((current) => current.map((message) => message.id === answerId
+            ? { ...message, text: message.text + chunk }
+            : message)),
+          controller.signal
+        )
+        setAiMessages((current) => current.map((message) => message.id === answerId
+          ? { ...message, streaming: false }
+          : message))
+      } catch (requestError) {
+        if (!(requestError instanceof DOMException && requestError.name === 'AbortError')) {
+          setAiError(requestError instanceof Error ? requestError.message : 'Không thể nhận câu trả lời từ AI.')
+        }
+        setAiMessages((current) => current.map((message) => message.id === answerId
+          ? { ...message, streaming: false }
+          : message))
+      } finally {
+        if (aiRequestRef.current === controller) {
+          aiRequestRef.current = null
+          setIsAiSending(false)
+        }
+      }
+      return
+    }
 
     setInputText('')
     clearSelectedFile()
@@ -702,6 +771,41 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           })
           })()
         )}
+        {aiMessages.map((message) => (
+          <article
+            key={message.id}
+            className={`flex items-start gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
+            aria-live={message.streaming ? 'polite' : undefined}
+          >
+            <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+              message.role === 'assistant' ? 'bg-[#eeefff] text-[#5b5fc7]' : 'bg-[#e8def8] text-[#4e3b72]'
+            }`}>
+              {message.role === 'assistant' ? <Bot size={17} /> : <span className="text-xs font-semibold">Bạn</span>}
+            </div>
+            <div className={`max-w-[min(85%,640px)] rounded-2xl px-4 py-3 text-sm leading-6 ${
+              message.role === 'assistant'
+                ? 'rounded-tl-sm border border-[#383838] bg-[#262626] text-gray-100'
+                : 'rounded-tr-sm bg-[#5B5FC7] text-white'
+            }`}>
+              {message.role === 'assistant' && (
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[#b8baff]">
+                  <Sparkles size={12} /> AI-Assistant
+                </p>
+              )}
+              {message.role === 'assistant'
+                ? message.text
+                  ? <AiMessageContent content={message.text} />
+                  : message.streaming
+                    ? <span className="animate-pulse">AI đang soạn câu trả lời...</span>
+                    : null
+                : <p className="whitespace-pre-wrap">{message.text}</p>}
+              {message.streaming && message.text && <span className="ml-1 inline-block h-3 w-1 animate-pulse bg-[#b8baff] align-middle" />}
+            </div>
+          </article>
+        ))}
+        {aiError && (
+          <p role="alert" className="ml-11 text-xs text-red-300">{aiError}</p>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -779,12 +883,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               placeholder={
                 selectedFile
                   ? 'Thêm chú thích cho tệp đính kèm (Enter để gửi)...'
-                  : 'Nhập tin nhắn...'
+                  : 'Nhập tin nhắn hoặc @AI-Assistant để hỏi AI...'
               }
               disabled={isSending}
               className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none"
             />
             <div className="flex items-center gap-1.5 text-gray-400 shrink-0 ml-2">
+              <button
+                type="button"
+                onClick={() => setInputText((current) => (
+                  current.startsWith('@AI-Assistant ') ? current : `@AI-Assistant ${current}`
+                ))}
+                disabled={isAiSending || isSending || !!selectedFile}
+                className="inline-flex items-center gap-1 rounded-md bg-[#5B5FC7]/20 px-2 py-1 text-[11px] font-semibold text-[#b8baff] hover:bg-[#5B5FC7]/35 disabled:opacity-50"
+                title="Hỏi AI về cuộc trò chuyện"
+              >
+                <Sparkles size={14} />
+                <span>Hỏi AI</span>
+              </button>
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
@@ -813,7 +929,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           <button
             type="submit"
-            disabled={(!inputText.trim() && !selectedFile) || isSending}
+            disabled={(!inputText.trim() && !selectedFile) || isSending || isAiSending}
             className="h-10 w-10 rounded-xl bg-[#5B5FC7] hover:bg-[#4f52b2] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all shadow-md active:scale-95 shrink-0"
             title="Gửi tin nhắn (Enter)"
           >

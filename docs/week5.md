@@ -13,7 +13,7 @@
 - [ ] **Mục tiêu 1 (TV1):** Tính năng Ghim tin nhắn (`PinnedMessages`), Đánh dấu tin nhắn quan trọng, Thư viện Tệp/Media đã chia sẻ (`GET /api/conversations/{id}/media`), Drawer tab bên phải khung chat & Xem trước Ảnh/PDF trực tiếp.
 - [ ] **Mục tiêu 2 (TV2):** Báo hiệu Chia sẻ màn hình qua Signaling Server (`SCREEN_SHARE`), Tích hợp `getDisplayMedia()` cho cả gọi 1-1 và Mesh nhóm, Layout ưu tiên phóng to màn hình đang chia sẻ.
 - [ ] **Mục tiêu 3 (TV3):** Chế độ Bảng vẽ ngay trong cuộc họp (Split-screen Video + Whiteboard), Xuất bảng vẽ ra ảnh PNG/PDF và API + UI Tóm tắt cuộc trò chuyện AI (Chat Summarizer & Action Items).
-> ⚠️ *Lưu ý đầu tuần cho TV3:* Dành 1 buổi đầu tuần rà soát & hoàn tất phần bot `@AI-Assistant` còn tồn đọng từ Tuần 4 trước khi ghép nối luồng Chat Summarizer của Tuần 5.
+> ⚠️ *Lưu ý đầu tuần cho TV3:* Phần bot `@AI-Assistant` và SSE đã được triển khai ở Tuần 4; xác nhận `GEMINI_API_KEY` hoạt động trước khi ghép nối luồng Chat Summarizer của Tuần 5.
 
 ---
 

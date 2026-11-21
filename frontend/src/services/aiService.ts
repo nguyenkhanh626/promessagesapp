@@ -1,6 +1,6 @@
 import { apiClient } from './apiClient'
 import type { ApiResponse } from '../types/auth'
-import type { AiHealth, AiPromptRequest, AiPromptResponse } from '../types/ai'
+import type { AiChatRequest, AiHealth, AiPromptRequest, AiPromptResponse } from '../types/ai'
 
 export const aiService = {
   async getHealth(): Promise<AiHealth> {
@@ -11,5 +11,16 @@ export const aiService = {
   async sendPrompt(request: AiPromptRequest): Promise<AiPromptResponse> {
     const response = await apiClient.post<ApiResponse<AiPromptResponse>>('/ai/test-prompt', request)
     return response.data.data
+  },
+
+  async streamChat(
+    request: AiChatRequest,
+    onChunk: (chunk: string) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    await apiClient.postSse('/ai/chat/stream', request, (event, data) => {
+      if (event === 'error') throw new Error(data)
+      if (event === 'message') onChunk(data)
+    }, signal)
   },
 }

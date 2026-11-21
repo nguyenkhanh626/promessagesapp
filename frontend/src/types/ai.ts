@@ -15,3 +15,8 @@ export interface AiPromptResponse {
   status: 'OK' | 'UNAVAILABLE'
   tokensUsed: number | null
 }
+
+export interface AiChatRequest {
+  conversationId: string
+  prompt: string
+}

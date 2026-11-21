@@ -8,10 +8,10 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 4
 
-- [ ] **Tiến độ chung toàn đội:** `70%` (Phân hệ của TV1 và Hội nghị Video Nhóm Mesh WebRTC của TV2 đã hoàn thành 100%)
+- [ ] **Tiến độ chung toàn đội:** `95%` (TV1 và TV2 hoàn tất; TV3 đã triển khai, còn chờ smoke test với Gemini thật)
 - [x] **Mục tiêu 1:** Hệ thống User Presence (`ONLINE / BUSY / AWAY / OFFLINE`), Typing Indicator thời gian thực, Tìm kiếm tin nhắn & Danh bạ người dùng (TV1) - **ĐÃ HOÀN THÀNH 100%**
 - [x] **Mục tiêu 2:** Hội nghị Video Nhóm đa người dùng (Mesh WebRTC 3-5 người), Video Grid tự co giãn & Nhận diện giọng nói VAD (TV2) - **ĐÃ HOÀN THÀNH 100%**
-- [ ] **Mục tiêu 3:** Tích hợp Bot trợ lý `@AI-Assistant` trong khung chat, SSE Streaming câu trả lời & Render Markdown/Code (TV3)
+- [x] **Mục tiêu 3:** Tích hợp Bot trợ lý `@AI-Assistant` trong khung chat, SSE Streaming câu trả lời & Render Markdown/Code (TV3) - đã kiểm thử tự động; cần `GEMINI_API_KEY` để nghiệm thu với Gemini thật.
 
 ---
 
@@ -117,3 +117,6 @@
 | [x] | **W4-TV2-04** | **TV2** | Giao diện `GroupVideoGrid` (1-5 ô, Spotlight Pin, VAD Highlight) | 8h | Co giãn mượt mà 1–5 ô video, viền sáng khi nói, ghim phóng to người trình bày. |
 | [x] | **W4-TV2-05** | **TV2** | Tích hợp Nút Gọi Nhóm & Banner Phòng họp trong `ChatWindow` | 4h | Bắt đầu hoặc tham gia cuộc họp video nhóm trực tiếp từ header cuộc hội thoại nhóm. |
 | [x] | **W4-TV2-06** | **TV2** | Unit Tests Mesh Signaling & Nghiệm thu Build | 6h | Unit Tests `SignalingControllerTest` & `npm run build` PASS 100%. |
+| [x] | **W4-TV3-01** | **TV3** | Backend SSE Gemini và ngữ cảnh hội thoại có kiểm tra quyền thành viên | 8h | `POST /api/ai/chat/stream` stream từng chunk; chỉ lấy lịch sử của thành viên hội thoại. |
+| [x] | **W4-TV3-02** | **TV3** | Bot `@AI-Assistant` trong ChatWindow và render Markdown/Code | 8h | Có nút Hỏi AI/mention, câu trả lời hiển thị trực tiếp theo luồng và hỗ trợ Markdown/code an toàn. |
+| [x] | **W4-TV3-03** | **TV3** | Unit Tests AI streaming, quyền truy cập & Build | 4h | Unit tests Backend và frontend build PASS; nghiệm thu Gemini thật cần cấu hình `GEMINI_API_KEY`. |

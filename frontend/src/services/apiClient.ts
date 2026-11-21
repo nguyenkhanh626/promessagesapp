@@ -65,6 +65,73 @@ class ApiClient {
     })
   }
 
+  async postSse(
+    endpoint: string,
+    body: unknown,
+    onEvent: (event: string, data: string) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const url = new URL(`${this.baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`)
+    const headers = new Headers({
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    })
+    const token = localStorage.getItem('token')
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    })
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          window.location.href = '/login'
+        }
+      }
+      throw new Error(errorBody.message || 'Không thể kết nối trợ lý AI.')
+    }
+    if (!response.body) throw new Error('Trình duyệt không hỗ trợ SSE streaming.')
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    const dispatch = (frame: string) => {
+      let event = 'message'
+      const data: string[] = []
+      for (const line of frame.split(/\r?\n/)) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''))
+      }
+      if (data.length) onEvent(event, data.join('\n'))
+    }
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        buffer += decoder.decode(value, { stream: !done })
+        while (true) {
+          const separator = /\r?\n\r?\n/.exec(buffer)
+          if (!separator || separator.index === undefined) break
+          dispatch(buffer.slice(0, separator.index))
+          buffer = buffer.slice(separator.index + separator[0].length)
+        }
+        if (done) break
+      }
+      if (buffer.trim()) dispatch(buffer)
+    } catch (error) {
+      await reader.cancel()
+      throw error
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
   put<T>(endpoint: string, body?: any, options?: RequestOptions) {
     return this.request<T>(endpoint, {
       ...options,

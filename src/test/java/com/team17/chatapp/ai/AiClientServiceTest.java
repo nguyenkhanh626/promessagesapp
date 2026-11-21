@@ -6,7 +6,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.List;
 import static org.springframework.http.HttpMethod.POST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -18,7 +21,8 @@ class AiClientServiceTest {
 
     @Test
     void reportsGeminiAsNotConfiguredWhenApiKeyIsMissing() {
-        AiClientService service = new AiClientService(RestClient.create(), "", "gemini-3.5-flash-lite");
+        AiClientService service = new AiClientService(
+                RestClient.create(), "", "gemini-3.5-flash-lite", new ObjectMapper());
 
         assertFalse(service.testConnection().healthy());
         assertEquals("NOT_CONFIGURED", service.testConnection().status());
@@ -41,13 +45,35 @@ class AiClientServiceTest {
                           "usageMetadata": {"totalTokenCount": 7}
                         }
                         """, MediaType.APPLICATION_JSON));
-        AiClientService service = new AiClientService(builder.build(), "test-key", "test-model");
+        AiClientService service = new AiClientService(builder.build(), "test-key", "test-model", new ObjectMapper());
 
         var response = service.sendPrompt(new AiPromptRequest("Hello", null));
 
         assertEquals("OK", response.status());
         assertEquals("Hello from Gemini", response.reply());
         assertEquals(7, response.tokensUsed());
+        server.verify();
+    }
+
+    @Test
+    void streamsGeminiTextChunks() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://gemini.test/v1beta");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(
+                        "https://gemini.test/v1beta/models/test-model:streamGenerateContent?alt=sse&key=test-key"))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("""
+                        data: {"candidates":[{"content":{"parts":[{"text":"Hello "}]}}]}
+
+                        data: {"candidates":[{"content":{"parts":[{"text":"from Gemini"}]}}]}
+
+                        """, MediaType.TEXT_EVENT_STREAM));
+        AiClientService service = new AiClientService(builder.build(), "test-key", "test-model", new ObjectMapper());
+        List<String> chunks = new ArrayList<>();
+
+        service.streamChat("Say hello", "Member: Hi", chunks::add);
+
+        assertEquals(List.of("Hello ", "from Gemini"), chunks);
         server.verify();
     }
 }
