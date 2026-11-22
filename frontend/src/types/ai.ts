@@ -20,3 +20,21 @@ export interface AiChatRequest {
   conversationId: string
   prompt: string
 }
+
+export interface ChatSummaryRequest {
+  messageLimit?: number
+  language?: string
+}
+
+export interface ChatSummaryActionItem {
+  assignee: string
+  description: string
+}
+
+export interface ChatSummary {
+  summary: string
+  keyTopics: string[]
+  actionItems: ChatSummaryActionItem[]
+  messageCount: number
+  generatedAt: string
+}

@@ -126,40 +126,41 @@
 > **Trọng tâm:** Tích hợp Bảng vẽ tương tác chạy ngay trong giao diện cuộc gọi (Split-screen Meeting Mode), Xuất bảng vẽ ra file ảnh PNG & PDF, và xây dựng tính năng AI Tóm tắt cuộc trò chuyện & trích xuất Action Items (`Chat Summarizer`).
 
 ### 📅 Ngày 1: Đồng bộ Tồn đọng Tuần 4 (`@AI-Assistant`) & Chuẩn bị Kiến trúc Tuần 5
-- [ ] **Sáng:** Hoàn thiện nốt phần còn thiếu từ Tuần 4: Endpoint SSE Streaming `/api/ai/chat` trong `AiController.java` và triệu hồi `@AI-Assistant` trong khung chat nhóm.
-- [ ] **Chiều:** Họp cùng TV2 để chốt cơ chế truyền `conversationId` / `roomId` từ `CallContext` sang `WhiteboardCanvas` khi bật bảng vẽ trong cuộc họp.
+- [x] **Sáng:** Hoàn thiện nốt phần còn thiếu từ Tuần 4: Endpoint SSE Streaming `/api/ai/chat/stream` trong `AiController.java` và triệu hồi `@AI-Assistant` trong khung chat nhóm.
+- [x] **Chiều:** Chốt cơ chế truyền `conversationId` / `roomId` từ `CallContext` sang `EmbeddedWhiteboard` khi bật bảng vẽ trong cuộc họp.
 
 ### 📅 Ngày 2: Nhúng Bảng vẽ Tương tác Trực tiếp vào Phòng họp (Split-screen View)
-- [ ] **Sáng:** Tái cấu trúc `WhiteboardCanvas.tsx` và `WhiteboardPage.tsx` để tách phần Studio Toolbar + Canvas thành Component tái sử dụng được (`EmbeddedWhiteboard.tsx`) nhận prop `sessionId` (gắn với `roomId` / `conversationId` của cuộc họp).
-- [ ] **Chiều:** Tích hợp vào `ActiveCallModal.tsx`:
-  - [ ] Bổ sung nút **"Bảng vẽ (`PenTool`)"** trên thanh điều khiển cuộc họp.
-  - [ ] Khi bật chế độ Bảng vẽ trong họp: Chia giao diện thành **Split-screen View** — một bên hiển thị Video người họp (dạng cột gọn hoặc lưới thu nhỏ), phần không gian chính còn lại là **Bảng vẽ tương tác thời gian thực** cho mọi thành viên trong cuộc gọi cùng vẽ song song.
+- [x] **Sáng:** Tái cấu trúc `WhiteboardCanvas.tsx` và `WhiteboardPage.tsx` để tách phần Studio Toolbar + Canvas thành Component tái sử dụng được (`EmbeddedWhiteboard`) nhận prop `sessionId` (gắn với `roomId` / `conversationId` của cuộc họp).
+- [x] **Chiều:** Tích hợp vào `ActiveCallModal.tsx`:
+  - [x] Bổ sung nút **"Bảng vẽ (`PenTool`)"** trên thanh điều khiển cuộc họp.
+  - [x] Khi bật chế độ Bảng vẽ trong họp: Chia giao diện thành **Split-screen View** — một bên hiển thị Video người họp (dạng cột gọn hoặc lưới thu nhỏ), phần không gian chính còn lại là **Bảng vẽ tương tác thời gian thực** cho mọi thành viên trong cuộc gọi cùng vẽ song song.
 
 ### 📅 Ngày 3: Xuất Bảng vẽ ra File Ảnh PNG & Tài liệu PDF
-- [ ] **Sáng:** Nâng cấp `frontend/src/utils/whiteboard.ts`:
-  - [ ] Hàm `exportCanvasToPng(canvas, filename)`: Vẽ nền trắng/lưới sạch sẽ rồi xuất ảnh sắc nét chuẩn `image/png` tải về máy.
-  - [ ] Hàm `exportCanvasToPdf(canvas, filename)`: Chuyển dữ liệu ảnh Canvas sang tài liệu PDF kích thước chuẩn (sử dụng `jspdf` hoặc trình in/tạo PDF vector nhẹ) kèm tiêu đề cuộc họp và timestamp.
-- [ ] **Chiều:** Gắn nút **"Xuất PNG"** và **"Xuất PDF"** lên thanh công cụ của cả `WhiteboardPage` và `EmbeddedWhiteboard` trong phòng họp.
+- [x] **Sáng:** Nâng cấp `frontend/src/utils/whiteboard.ts`:
+  - [x] Hàm `exportCanvasToPng(canvas, filename)`: Vẽ nền trắng/lưới sạch sẽ rồi xuất ảnh sắc nét chuẩn `image/png` tải về máy.
+  - [x] Hàm `exportCanvasToPdf(canvas, filename)`: Chuyển dữ liệu ảnh Canvas sang tài liệu PDF kích thước chuẩn (sử dụng `jspdf`) kèm tiêu đề cuộc họp và timestamp.
+- [x] **Chiều:** Gắn nút **"Xuất PNG"** và **"Xuất PDF"** lên thanh công cụ của cả `WhiteboardPage` và `EmbeddedWhiteboard` trong phòng họp.
 
 ### 📅 Ngày 4-5: Backend AI Tóm tắt Cuộc trò chuyện (`Chat Summarizer`)
-- [ ] **Sáng (Ngày 4):** Tạo DTOs cho Chat Summarizer:
-  - [ ] `ChatSummaryRequest.java` (`conversationId`, `messageLimit` mặc định 50–100 tin nhắn gần nhất, `language`).
-  - [ ] `ChatSummaryResponse.java` (`summary`: Tóm tắt tổng quan, `keyTopics`: Các chủ đề chính, `actionItems`: Danh sách đầu việc cần làm gồm người phụ trách & mô tả, `messageCount`, `generatedAt`).
-- [ ] **Chiều (Ngày 4) & Ngày 5:** Xây dựng `ChatSummarizerService.java` (kết hợp `MessageRepository` & `AiClientService`):
-  - [ ] Kiểm tra quyền thành viên trong cuộc hội thoại qua `ConversationMemberRepository`.
-  - [ ] Gom các tin nhắn văn bản gần nhất (bỏ qua `SYSTEM` rác hoặc giữ ngữ cảnh chính), định dạng thành hội thoại `[Tên người gửi - Giờ]: Nội dung`.
-  - [ ] Thiết kế System Prompt chuẩn JSON/Structured Output yêu cầu Gemini AI phân tích và trích xuất **Tóm tắt nội dung chính** + **Action Items**.
-  - [ ] Mở endpoint `POST /api/ai/conversations/{conversationId}/summarize` trong `AiController.java`.
+- [x] **Sáng (Ngày 4):** Tạo DTOs cho Chat Summarizer:
+  - [x] `ChatSummaryRequest.java` (`messageLimit` mặc định 50 tin nhắn gần nhất, `language`; conversation ID lấy từ URL).
+  - [x] `ChatSummaryResponse.java` (`summary`: Tóm tắt tổng quan, `keyTopics`: Các chủ đề chính, `actionItems`: Danh sách đầu việc cần làm gồm người phụ trách & mô tả, `messageCount`, `generatedAt`).
+- [x] **Chiều (Ngày 4) & Ngày 5:** Xây dựng `ChatSummarizerService.java` (tái sử dụng `ChatService`/`MessageRepository` và `AiClientService`):
+  - [x] Kiểm tra quyền thành viên trong cuộc hội thoại qua `ChatService` trước khi gọi AI.
+  - [x] Gom các tin nhắn văn bản gần nhất, định dạng thành hội thoại `[Tên người gửi - Giờ]: Nội dung`.
+  - [x] Thiết kế prompt yêu cầu Gemini trả JSON hợp lệ để phân tích và trích xuất **Tóm tắt nội dung chính** + **Action Items**.
+  - [x] Mở endpoint `POST /api/ai/conversations/{conversationId}/summarize` trong `AiController.java`.
 
 ### 📅 Ngày 6: Giao diện Modal "Tóm tắt Cuộc trò chuyện" trong Khung Chat
-- [ ] **Sáng:** Cập nhật `frontend/src/types/ai.ts` và `frontend/src/services/aiService.ts` (thêm hàm `summarizeConversation(conversationId, messageLimit)`).
-- [ ] **Chiều:** Xây dựng Component `ChatSummaryModal.tsx` & tích hợp vào Header `ChatWindow.tsx`:
-  - [ ] Nút **"✨ Tóm tắt AI"** trên Header khung chat (cạnh nút Tìm kiếm).
-  - [ ] Hiển thị giao diện loading mượt mà, sau đó render rõ ràng 3 phần: **Tóm tắt chung**, **Các điểm thảo luận chính**, và **Danh sách việc cần làm (Action Items)** dạng checklist kèm nút sao chép nhanh (Copy Markdown).
+- [x] **Sáng:** Cập nhật `frontend/src/types/ai.ts` và `frontend/src/services/aiService.ts` (thêm hàm `summarizeConversation(conversationId, messageLimit)`).
+- [x] **Chiều:** Xây dựng Component `ChatSummaryModal.tsx` & tích hợp vào Header `ChatWindow.tsx`:
+  - [x] Nút **"✨ Tóm tắt AI"** trên Header khung chat (cạnh nút Tìm kiếm).
+  - [x] Hiển thị giao diện loading, sau đó render rõ ràng 3 phần: **Tóm tắt chung**, **Các điểm thảo luận chính**, và **Danh sách việc cần làm (Action Items)** dạng checklist kèm nút sao chép nhanh (Copy Markdown).
 
 ### 📅 Ngày 7: Unit Tests & Kiểm thử Kết hợp E2E
-- [ ] **Sáng:** Viết Unit Test cho `ChatSummarizerService` (mock `MessageRepository` và Gemini `RestClient` kiểm tra phân tích phản hồi thành `summary` + `actionItems`) và test bảo vệ quyền truy cập hội thoại.
-- [ ] **Chiều:** Chạy `./mvnw test` và `npm run build` PASS 100%, test liên thông kịch bản: Họp nhóm + Chia sẻ màn hình + Vẽ Whiteboard Split-screen + Tóm tắt đoạn chat bằng AI.
+- [x] **Sáng:** Viết Unit Test cho `ChatSummarizerService` (mock nguồn tin nhắn và Gemini client, kiểm tra `summary` + `actionItems`) và test bảo vệ quyền truy cập hội thoại.
+- [x] **Chiều:** Chạy `./mvnw test` và `npm run build` PASS; luồng tóm tắt được xác nhận bằng unit tests.
+- [ ] **Nghiệm thu E2E:** Chưa chạy thủ công kịch bản họp nhóm + bảng vẽ + Gemini tóm tắt trên ứng dụng đang hoạt động.
 
 ---
 
@@ -177,10 +178,10 @@
 | [ ] | **W5-TV2-02** | **TV2** | Tích hợp `getDisplayMedia()` & `replaceTrack` trên WebRTC Client | 8h | Tráo track Camera <-> Màn hình mượt mà không rớt kết nối, xử lý Stop Sharing. |
 | [ ] | **W5-TV2-03** | **TV2** | Presentation Layout (Phóng to Màn hình Chia sẻ, Thu nhỏ Camera) | 8h | Tự động chuyển giao diện ưu tiên màn hình chia sẻ cho 1-1 & Mesh nhóm. |
 | [ ] | **W5-TV2-04** | **TV2** | Unit Tests Screen Share Signaling & Test E2E Đa trình duyệt | 5h | `SignalingControllerTest` pass 100%, chia sẻ màn hình sắc nét giữa 2-3 tab. |
-| [ ] | **W5-TV3-01** | **TV3** | Đồng bộ nốt `@AI-Assistant` & Nhúng Whiteboard Split-screen vào Họp | 8h | Mở bảng vẽ ngay trong `ActiveCallModal` chia đôi màn hình Video + Canvas đồng bộ. |
-| [ ] | **W5-TV3-02** | **TV3** | Tính năng Xuất Bảng vẽ ra File Ảnh PNG & Tài liệu PDF | 5h | Xuất file PNG và PDF sắc nét từ dữ liệu nét vẽ Canvas hiện tại. |
-| [ ] | **W5-TV3-03** | **TV3** | Backend `ChatSummarizerService` & API Tóm tắt Hội thoại AI | 8h | Gom tin nhắn từ DB, gọi Gemini API trả về Summary + Key Topics + Action Items. |
-| [ ] | **W5-TV3-04** | **TV3** | Modal `"✨ Tóm tắt AI"` trong `ChatWindow` & Unit Tests | 6h | Hiển thị đẹp các đầu việc cần làm (Action Items), sao chép nhanh & Pass Unit Tests. |
+| [x] | **W5-TV3-01** | **TV3** | Đồng bộ nốt `@AI-Assistant` & Nhúng Whiteboard Split-screen vào Họp | 8h | Mở bảng vẽ ngay trong `ActiveCallModal` chia đôi màn hình Video + Canvas đồng bộ. |
+| [x] | **W5-TV3-02** | **TV3** | Tính năng Xuất Bảng vẽ ra File Ảnh PNG & Tài liệu PDF | 5h | Xuất file PNG và PDF sắc nét từ dữ liệu nét vẽ Canvas hiện tại. |
+| [x] | **W5-TV3-03** | **TV3** | Backend `ChatSummarizerService` & API Tóm tắt Hội thoại AI | 8h | Gom tin nhắn từ DB, gọi Gemini API trả về Summary + Key Topics + Action Items. |
+| [x] | **W5-TV3-04** | **TV3** | Modal `"✨ Tóm tắt AI"` trong `ChatWindow` & Unit Tests | 6h | Hiển thị đẹp các đầu việc cần làm (Action Items), sao chép nhanh & Pass Unit Tests. |
 
 ---
 
@@ -189,6 +190,6 @@
 - [ ] **Tiêu chí 1 (TV1):** Rê chuột vào bất kỳ tin nhắn nào bấm **Ghim** -> Banner ghim hiện lên đầu khung chat cho tất cả thành viên đang mở phòng; mở tab **"Tin nhắn đã ghim"** bấm vào sẽ cuộn tới đúng tin nhắn gốc.
 - [ ] **Tiêu chí 2 (TV1):** Mở tab **"Tệp đã chia sẻ"** thấy đầy đủ ảnh và file đã gửi; bấm vào **ảnh** hoặc **file PDF** xem trước được trực tiếp ngay trên modal trong ứng dụng.
 - [ ] **Tiêu chí 3 (TV2):** Trong cuộc gọi 1-1 hoặc cuộc họp nhóm, bấm **"Chia sẻ màn hình"** -> các thành viên khác thấy màn hình chia sẻ phóng to rõ nét kèm dải camera thu nhỏ; bấm dừng chia sẻ tự động quay lại Webcam bình thường.
-- [ ] **Tiêu chí 4 (TV3):** Ngay trong cuộc họp đang diễn ra, mở được **Bảng vẽ Split-screen** để mọi người vừa nhìn video nhau vừa cùng vẽ đồng thời, và xuất được bảng vẽ thành file PNG / PDF.
-- [ ] **Tiêu chí 5 (TV3):** Tại khung chat có nhiều tin nhắn, bấm nút **"Tóm tắt AI"** -> hệ thống tổng hợp được nội dung chính và danh sách đầu việc cần làm (Action Items).
+- [ ] **Tiêu chí 4 (TV3):** Nghiệm thu thủ công trong cuộc họp nhóm: mở **Bảng vẽ Split-screen**, vẽ đồng thời và xuất bảng vẽ thành file PNG / PDF.
+- [ ] **Tiêu chí 5 (TV3):** Nghiệm thu thủ công nút **"Tóm tắt AI"** với Gemini đang được cấu hình, xác nhận nội dung chính và danh sách Action Items.
 - [ ] **Tiêu chí 6 (Toàn đội):** Toàn bộ `./mvnw test` và `npm run build` đều PASS 100% trước khi merge vào nhánh `main` / `develop`.

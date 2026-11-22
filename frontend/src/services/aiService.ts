@@ -1,6 +1,13 @@
 import { apiClient } from './apiClient'
 import type { ApiResponse } from '../types/auth'
-import type { AiChatRequest, AiHealth, AiPromptRequest, AiPromptResponse } from '../types/ai'
+import type {
+  AiChatRequest,
+  AiHealth,
+  AiPromptRequest,
+  AiPromptResponse,
+  ChatSummary,
+  ChatSummaryRequest,
+} from '../types/ai'
 
 export const aiService = {
   async getHealth(): Promise<AiHealth> {
@@ -22,5 +29,16 @@ export const aiService = {
       if (event === 'error') throw new Error(data)
       if (event === 'message') onChunk(data)
     }, signal)
+  },
+
+  async summarizeConversation(
+    conversationId: string,
+    request: ChatSummaryRequest = {}
+  ): Promise<ChatSummary> {
+    const response = await apiClient.post<ApiResponse<ChatSummary>>(
+      `/ai/conversations/${conversationId}/summarize`,
+      request
+    )
+    return response.data.data
   },
 }

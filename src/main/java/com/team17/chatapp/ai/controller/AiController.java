@@ -4,7 +4,10 @@ import com.team17.chatapp.ai.dto.AiChatRequest;
 import com.team17.chatapp.ai.dto.AiHealthResponse;
 import com.team17.chatapp.ai.dto.AiPromptRequest;
 import com.team17.chatapp.ai.dto.AiPromptResponse;
+import com.team17.chatapp.ai.dto.ChatSummaryRequest;
+import com.team17.chatapp.ai.dto.ChatSummaryResponse;
 import com.team17.chatapp.ai.service.AiClientService;
+import com.team17.chatapp.ai.service.ChatSummarizerService;
 import com.team17.chatapp.auth.entity.User;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.dto.MessageDto;
@@ -22,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,6 +34,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.UUID;
 import java.util.Comparator;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Collectors;
@@ -40,16 +45,19 @@ import java.util.stream.Collectors;
 public class AiController {
 
     private final AiClientService aiClientService;
+    private final ChatSummarizerService chatSummarizerService;
     private final ChatService chatService;
     private final UserRepository userRepository;
     private final AsyncTaskExecutor aiStreamingExecutor;
 
     public AiController(
             AiClientService aiClientService,
+            ChatSummarizerService chatSummarizerService,
             ChatService chatService,
             UserRepository userRepository,
             @Qualifier("aiStreamingExecutor") AsyncTaskExecutor aiStreamingExecutor) {
         this.aiClientService = aiClientService;
+        this.chatSummarizerService = chatSummarizerService;
         this.chatService = chatService;
         this.userRepository = userRepository;
         this.aiStreamingExecutor = aiStreamingExecutor;
@@ -73,6 +81,17 @@ public class AiController {
                     .build();
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
         }
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/conversations/{conversationId}/summarize")
+    public ResponseEntity<ApiResponse<ChatSummaryResponse>> summarizeConversation(
+            @PathVariable UUID conversationId,
+            @Valid @RequestBody(required = false) ChatSummaryRequest request,
+            Authentication authentication) {
+        User user = getAuthenticatedUser(authentication);
+        ChatSummaryResponse response = chatSummarizerService.summarize(
+                conversationId, user.getId(), request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

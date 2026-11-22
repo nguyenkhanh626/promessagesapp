@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Minimize2, Settings, Users } from 'lucide-react'
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Minimize2, Settings, Users, PenTool } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
 import { useAuth } from '../../context/AuthContext'
 import { VideoCallView } from './VideoCallView'
 import { GroupVideoGrid } from './GroupVideoGrid'
 import { DeviceSettingsModal } from './DeviceSettingsModal'
+import { EmbeddedWhiteboard } from '../../pages/WhiteboardPage'
 
 export const ActiveCallModal: React.FC = () => {
   const { user } = useAuth()
@@ -12,6 +13,7 @@ export const ActiveCallModal: React.FC = () => {
     callStatus,
     callMode,
     callType,
+    currentRoomId,
     targetUser,
     caller,
     participants,
@@ -28,6 +30,10 @@ export const ActiveCallModal: React.FC = () => {
   } = useCall()
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [whiteboardTarget, setWhiteboardTarget] = useState<typeof targetUser>(null)
+  const showWhiteboard = callMode === 'GROUP'
+    && targetUser !== null
+    && whiteboardTarget === targetUser
 
   // Không hiển thị modal đầy đủ nếu đang ở trạng thái rảnh, có chuông đến hoặc đang thu nhỏ
   if (
@@ -78,22 +84,57 @@ export const ActiveCallModal: React.FC = () => {
           </div>
 
           {/* Lưới Video Adaptive & VAD */}
-          <div className="flex-1 min-h-0">
-            <GroupVideoGrid
-              localUser={{
-                id: user?.id || 'me',
-                displayName: user?.displayName || 'Bạn',
-                avatarUrl: user?.avatarUrl,
-              }}
-              localStream={localVideoStream}
-              isLocalMuted={isMuted}
-              isLocalCameraOff={!isVideoEnabled}
-              participants={participants}
-            />
+          <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
+            {showWhiteboard && currentRoomId ? (
+              <>
+                <div className="min-h-[180px] min-w-0 flex-1 border-b border-white/10 sm:min-h-0 sm:min-w-[250px] sm:border-b-0 sm:border-r">
+                  <GroupVideoGrid
+                    localUser={{
+                      id: user?.id || 'me',
+                      displayName: user?.displayName || 'Bạn',
+                      avatarUrl: user?.avatarUrl,
+                    }}
+                    localStream={localVideoStream}
+                    isLocalMuted={isMuted}
+                    isLocalCameraOff={!isVideoEnabled}
+                    participants={participants}
+                  />
+                </div>
+                <div className="min-h-[360px] min-w-0 flex-[2]">
+                  <EmbeddedWhiteboard sessionId={currentRoomId} />
+                </div>
+              </>
+            ) : (
+              <GroupVideoGrid
+                localUser={{
+                  id: user?.id || 'me',
+                  displayName: user?.displayName || 'Bạn',
+                  avatarUrl: user?.avatarUrl,
+                }}
+                localStream={localVideoStream}
+                isLocalMuted={isMuted}
+                isLocalCameraOff={!isVideoEnabled}
+                participants={participants}
+              />
+            )}
           </div>
 
           {/* Thanh điều khiển dưới cùng */}
           <div className="h-20 px-6 flex items-center justify-center gap-4 border-t border-white/10 bg-[#1b1b1f] shrink-0">
+            <button
+              type="button"
+              onClick={() => setWhiteboardTarget(showWhiteboard ? null : targetUser)}
+              className={`h-12 px-4 rounded-full flex items-center justify-center gap-2 transition-all shadow-md ${
+                showWhiteboard
+                  ? 'bg-[#5B5FC7] text-white'
+                  : 'bg-[#2c2c32] text-white hover:bg-[#383840]'
+              }`}
+              title={showWhiteboard ? 'Đóng bảng vẽ' : 'Mở bảng vẽ cộng tác'}
+            >
+              <PenTool size={19} />
+              <span className="hidden sm:inline text-sm">{showWhiteboard ? 'Đóng bảng' : 'Bảng vẽ'}</span>
+            </button>
+
             <button
               type="button"
               onClick={toggleMute}

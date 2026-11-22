@@ -23,7 +23,7 @@ import { chatService } from '../services/chatService'
 import { whiteboardService } from '../services/whiteboardService'
 import type { Conversation } from '../types/chat'
 import type { WhiteboardEvent, WhiteboardSession, WhiteboardShape } from '../types/whiteboard'
-import { applyWhiteboardEvent } from '../utils/whiteboard'
+import { applyWhiteboardEvent, exportCanvasToPdf, exportCanvasToPng } from '../utils/whiteboard'
 
 const colors = [
   { label: 'Tím Teams', value: '#5B5FC7' },
@@ -99,10 +99,10 @@ function shapeToSvg(shape: WhiteboardShape) {
   return `<path d="${path}" ${stroke} fill="none"/>`
 }
 
-export function WhiteboardPage() {
+function WhiteboardStudio({ embeddedConversationId }: { embeddedConversationId?: string }) {
   const { token, user } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [conversationId, setConversationId] = useState('')
+  const [conversationId, setConversationId] = useState(embeddedConversationId || '')
   const [session, setSession] = useState<WhiteboardSession | null>(null)
   const [shapes, setShapes] = useState<WhiteboardShape[]>([])
   const [canUndo, setCanUndo] = useState(false)
@@ -112,8 +112,8 @@ export function WhiteboardPage() {
   const [widthIndex, setWidthIndex] = useState(1)
   const [fontIndex, setFontIndex] = useState(2)
   const [tool, setTool] = useState<WhiteboardTool>('PENCIL')
-  const [loadingConversations, setLoadingConversations] = useState(true)
-  const [openingSession, setOpeningSession] = useState(false)
+  const [loadingConversations, setLoadingConversations] = useState(!embeddedConversationId)
+  const [openingSession, setOpeningSession] = useState(Boolean(embeddedConversationId))
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [showClearDialog, setShowClearDialog] = useState(false)
@@ -126,6 +126,7 @@ export function WhiteboardPage() {
   const sendEventRef = useRef<(event: WhiteboardEvent) => void>(() => {})
 
   useEffect(() => {
+    if (embeddedConversationId) return
     let active = true
     chatService.getConversations()
       .then((items) => {
@@ -141,7 +142,7 @@ export function WhiteboardPage() {
         if (active) setLoadingConversations(false)
       })
     return () => { active = false }
-  }, [])
+  }, [embeddedConversationId])
 
   const commitEvent = useCallback((event: WhiteboardEvent, broadcast: boolean, recordHistory = true) => {
     if (event.action === 'CLEAR' && shapesRef.current.length === 0) return
@@ -181,14 +182,19 @@ export function WhiteboardPage() {
     sendEventRef.current = sendEvent
   }, [sendEvent])
 
-  const openSession = async () => {
-    if (!conversationId) return
-    setOpeningSession(true)
-    setErrorMessage(null)
+  const openSession = useCallback(async (
+    requestedConversationId = conversationId,
+    showLoading = true
+  ) => {
+    if (!requestedConversationId) return
+    if (showLoading) {
+      setOpeningSession(true)
+      setErrorMessage(null)
+    }
     try {
-      const selectedConversation = conversations.find((item) => item.id === conversationId)
+      const selectedConversation = conversations.find((item) => item.id === requestedConversationId)
       const opened = await whiteboardService.openSession(
-        conversationId,
+        requestedConversationId,
         selectedConversation?.name || 'Bảng vẽ nhóm'
       )
       const snapshot = await whiteboardService.getLatestSnapshot(opened.id)
@@ -207,7 +213,11 @@ export function WhiteboardPage() {
     } finally {
       setOpeningSession(false)
     }
-  }
+  }, [conversationId, conversations])
+
+  useEffect(() => {
+    if (embeddedConversationId) void openSession(embeddedConversationId, false)
+  }, [embeddedConversationId, openSession])
 
   const saveSnapshot = useCallback(() => {
     if (!session) return
@@ -279,10 +289,20 @@ export function WhiteboardPage() {
 
   const exportPng = () => {
     if (!canvasRef.current) return
-    const link = document.createElement('a')
-    link.download = 'whiteboard.png'
-    link.href = canvasRef.current.toDataURL('image/png')
-    link.click()
+    try {
+      exportCanvasToPng(canvasRef.current, 'whiteboard.png')
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    }
+  }
+
+  const exportPdf = async () => {
+    if (!canvasRef.current) return
+    try {
+      await exportCanvasToPdf(canvasRef.current, 'whiteboard.pdf', session?.title || 'Bảng vẽ cuộc họp')
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    }
   }
 
   const exportSvg = () => {
@@ -304,7 +324,9 @@ export function WhiteboardPage() {
   }, [])
 
   return (
-    <section className="flex h-full min-h-[560px] flex-col overflow-hidden rounded-xl border border-[#e1dfdd] bg-white text-[#242424] shadow-sm">
+    <section className={`flex h-full min-h-0 flex-col overflow-hidden bg-white text-[#242424] ${
+      embeddedConversationId ? '' : 'min-h-[560px] rounded-xl border border-[#e1dfdd] shadow-sm'
+    }`}>
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e1dfdd] px-5 py-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6264a7]">Không gian cộng tác</p>
@@ -322,7 +344,7 @@ export function WhiteboardPage() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-end gap-3 border-b border-[#e1dfdd] bg-[#faf9f8] px-4 py-3">
+      {!embeddedConversationId && <div className="flex flex-wrap items-end gap-3 border-b border-[#e1dfdd] bg-[#faf9f8] px-4 py-3">
         <label className="min-w-[220px] flex-1 text-sm text-[#616161]">
           Cuộc trò chuyện
           <select
@@ -352,7 +374,7 @@ export function WhiteboardPage() {
         </label>
         <button
           type="button"
-          onClick={openSession}
+          onClick={() => openSession()}
           disabled={!conversationId || openingSession}
           className="rounded-md bg-[#5b5fc7] px-4 py-2 text-sm font-medium text-white hover:bg-[#464aaf] disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -372,12 +394,21 @@ export function WhiteboardPage() {
             <button type="button" onClick={exportPng} title="Xuất ảnh PNG" aria-label="Xuất bảng vẽ ra ảnh PNG" className="grid h-9 w-9 place-items-center rounded-md border border-[#d1d1d1] hover:bg-white">
               <Download size={17} />
             </button>
+            <button type="button" onClick={() => void exportPdf()} title="Xuất tài liệu PDF" aria-label="Xuất bảng vẽ ra tài liệu PDF" className="rounded-md border border-[#d1d1d1] px-2.5 text-xs hover:bg-white">
+              PDF
+            </button>
             <button type="button" onClick={exportSvg} title="Xuất ảnh SVG" aria-label="Xuất bảng vẽ ra ảnh SVG" className="rounded-md border border-[#d1d1d1] px-2.5 text-xs hover:bg-white">
               SVG
             </button>
           </div>
         )}
-      </div>
+      </div>}
+      {embeddedConversationId && (
+        <div className="flex items-center justify-between border-b border-[#e1dfdd] bg-[#faf9f8] px-3 py-2 text-sm text-[#616161]">
+          <span>Bảng vẽ đang đồng bộ với cuộc họp</span>
+          <span>{openingSession ? 'Đang mở...' : connectionState === 'connected' ? 'Đang đồng bộ' : 'Đang kết nối'}</span>
+        </div>
+      )}
 
       {session && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-[#e1dfdd] bg-[#faf9f8] px-4 py-3">
@@ -499,4 +530,12 @@ export function WhiteboardPage() {
       )}
     </section>
   )
+}
+
+export function WhiteboardPage() {
+  return <WhiteboardStudio />
+}
+
+export function EmbeddedWhiteboard({ sessionId }: { sessionId: string }) {
+  return <WhiteboardStudio key={sessionId} embeddedConversationId={sessionId} />
 }

@@ -3,6 +3,7 @@ package com.team17.chatapp.ai;
 import com.team17.chatapp.ai.controller.AiController;
 import com.team17.chatapp.ai.dto.AiChatRequest;
 import com.team17.chatapp.ai.service.AiClientService;
+import com.team17.chatapp.ai.service.ChatSummarizerService;
 import com.team17.chatapp.auth.entity.User;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.service.ChatService;
@@ -30,6 +31,8 @@ class AiControllerTest {
     @Mock
     private AiClientService aiClientService;
     @Mock
+    private ChatSummarizerService chatSummarizerService;
+    @Mock
     private ChatService chatService;
     @Mock
     private UserRepository userRepository;
@@ -44,7 +47,8 @@ class AiControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new AiController(aiClientService, chatService, userRepository, aiStreamingExecutor);
+        controller = new AiController(
+                aiClientService, chatSummarizerService, chatService, userRepository, aiStreamingExecutor);
         conversationId = UUID.randomUUID();
         userId = UUID.randomUUID();
         User user = new User();

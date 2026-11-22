@@ -24,6 +24,7 @@ import { aiService } from '../../services/aiService'
 import { chatService } from '../../services/chatService'
 import { STATUS_CONFIG } from './UserDirectoryModal'
 import { AiMessageContent } from './AiMessageContent'
+import { ChatSummaryModal } from './ChatSummaryModal'
 
 interface AiChatMessage {
   id: string
@@ -62,6 +63,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [aiMessages, setAiMessages] = useState<AiChatMessage[]>([])
   const [aiError, setAiError] = useState<string | null>(null)
   const [isAiSending, setIsAiSending] = useState(false)
+  const [showSummaryModal, setShowSummaryModal] = useState(false)
 
   // Trạng thái tìm kiếm tin nhắn trong hội thoại
   const [showMessageSearch, setShowMessageSearch] = useState(false)
@@ -133,6 +135,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setAiMessages([])
     setAiError(null)
     setIsAiSending(false)
+    setShowSummaryModal(false)
     setSelectedFile(null)
     setFilePreviewUrl(null)
     setInputText('')
@@ -446,6 +449,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             title="Tìm kiếm tin nhắn trong cuộc trò chuyện"
           >
             <Search size={17} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSummaryModal(true)}
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-[#c5c6ff] hover:text-white hover:bg-[#383838] transition-colors"
+            title="Tóm tắt cuộc trò chuyện bằng AI"
+            aria-label="Tóm tắt cuộc trò chuyện bằng AI"
+          >
+            <Sparkles size={17} />
           </button>
 
           {isGroup && (
@@ -971,6 +983,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             />
           </div>
         </div>
+      )}
+      {showSummaryModal && conversation && (
+        <ChatSummaryModal
+          conversationId={conversation.id}
+          onClose={() => setShowSummaryModal(false)}
+        />
       )}
     </div>
   )
