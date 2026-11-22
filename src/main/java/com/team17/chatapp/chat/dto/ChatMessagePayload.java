@@ -28,4 +28,7 @@ public class ChatMessagePayload {
     private String fileName;
 
     private Long fileSize;
+
+    @Builder.Default
+    private boolean important = false;
 }

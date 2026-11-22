@@ -9,8 +9,8 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 5
 
-- [ ] **Tiến độ chung toàn đội:** `64%` (Phân hệ Chia sẻ màn hình của TV2 và Bảng vẽ Split-screen + AI Summarizer của TV3 đã hoàn thành 100%)
-- [ ] **Mục tiêu 1 (TV1):** Tính năng Ghim tin nhắn (`PinnedMessages`), Đánh dấu tin nhắn quan trọng, Thư viện Tệp/Media đã chia sẻ (`GET /api/conversations/{id}/media`), Drawer tab bên phải khung chat & Xem trước Ảnh/PDF trực tiếp.
+- [x] **Tiến độ chung toàn đội:** `100%` (Cả 3 thành viên TV1, TV2, TV3 đã hoàn thành 100% mục tiêu Tuần 5)
+- [x] **Mục tiêu 1 (TV1):** Tính năng Ghim tin nhắn (`PinnedMessages`), Đánh dấu tin nhắn quan trọng, Thư viện Tệp/Media đã chia sẻ (`GET /api/conversations/{id}/media`), Drawer tab bên phải khung chat & Xem trước Ảnh/PDF trực tiếp. - **ĐÃ HOÀN THÀNH 100%**
 - [x] **Mục tiêu 2 (TV2):** Báo hiệu Chia sẻ màn hình qua Signaling Server (`SCREEN_SHARE`), Tích hợp `getDisplayMedia()` cho cả gọi 1-1 và Mesh nhóm, Layout ưu tiên phóng to màn hình đang chia sẻ. - **ĐÃ HOÀN THÀNH 100%**
 - [x] **Mục tiêu 3 (TV3):** Chế độ Bảng vẽ ngay trong cuộc họp (Split-screen Video + Whiteboard), Xuất bảng vẽ ra ảnh PNG/PDF và API + UI Tóm tắt cuộc trò chuyện AI (Chat Summarizer & Action Items). - **ĐÃ HOÀN THÀNH 100%**
 > ⚠️ *Lưu ý đầu tuần cho TV3:* Phần bot `@AI-Assistant` và SSE đã được triển khai ở Tuần 4; xác nhận `GEMINI_API_KEY` hoạt động trước khi ghép nối luồng Chat Summarizer của Tuần 5.
@@ -22,61 +22,61 @@
 > **Trọng tâm:** Xây dựng chức năng Ghim tin nhắn quan trọng, Thư viện lưu trữ tập trung toàn bộ Hình ảnh & Tệp tài liệu của từng cuộc hội thoại, Drawer bên phải khung chat với 2 tab (**Tin nhắn đã ghim** & **Tệp đã chia sẻ**) và Modal xem trước Ảnh/PDF trực tiếp.
 
 ### 📅 Ngày 1: Thiết kế Cơ sở dữ liệu Ghim tin nhắn & Mở rộng `Message`
-- [ ] **Sáng:** Họp Sprint Planning Tuần 5, thống nhất cấu trúc sự kiện WebSocket `/topic/chat/{conversationId}/pin` và quy ước quyền ghim/bỏ ghim tin nhắn trong hội thoại.
-- [ ] **Chiều:** Cập nhật `Message.java` (hoặc tạo Entity `PinnedMessage.java` tùy chọn tham chiếu):
-  - [ ] Bổ sung trường `isPinned` (`boolean`, mặc định `false`), `pinnedBy` (`UUID`), `pinnedAt` (`LocalDateTime`).
-  - [ ] Bổ sung trường `isImportant` (`boolean`, mặc định `false`) phục vụ đánh dấu tin nhắn quan trọng (Important / Priority Message).
-- [ ] **Chiều:** Cập nhật `MessageDto.java` và `SendMessageRequest.java` bổ sung `isPinned`, `pinnedByName`, `pinnedAt`, `isImportant`.
+- [x] **Sáng:** Họp Sprint Planning Tuần 5, thống nhất cấu trúc sự kiện WebSocket `/topic/chat/{conversationId}/pin` và quy ước quyền ghim/bỏ ghim tin nhắn trong hội thoại.
+- [x] **Chiều:** Cập nhật `Message.java` (hoặc tạo Entity `PinnedMessage.java` tùy chọn tham chiếu):
+  - [x] Bổ sung trường `isPinned` (`boolean`, mặc định `false`), `pinnedBy` (`UUID`), `pinnedAt` (`LocalDateTime`).
+  - [x] Bổ sung trường `isImportant` (`boolean`, mặc định `false`) phục vụ đánh dấu tin nhắn quan trọng (Important / Priority Message).
+- [x] **Chiều:** Cập nhật `MessageDto.java` và `SendMessageRequest.java` bổ sung `isPinned`, `pinnedByName`, `pinnedAt`, `isImportant`.
 
 ### 📅 Ngày 2: Truy vấn Kho lưu trữ Media/Files & Ghim Tin nhắn (`MessageRepository`)
-- [ ] **Sáng:** Mở rộng `MessageRepository.java`:
-  - [ ] `findByConversationIdAndIsPinnedTrueOrderByPinnedAtDesc(UUID conversationId)`: Lấy danh sách tin nhắn đã ghim theo thứ tự mới ghim nhất.
-  - [ ] `findByConversationIdAndMessageTypeInOrderByCreatedAtDesc(UUID conversationId, List<MessageType> types)`: Truy vấn toàn bộ tin nhắn loại `IMAGE` và `FILE` có `fileUrl != null` trong hội thoại.
-  - [ ] Hỗ trợ lọc riêng theo loại `IMAGE` (Ảnh) hoặc `FILE` (Tài liệu) và phân trang (`Pageable`).
-- [ ] **Chiều:** Tạo DTOs phản hồi:
-  - [ ] `ConversationMediaDto.java` (`messageId`, `senderId`, `senderName`, `messageType`, `fileUrl`, `fileName`, `fileSize`, `createdAt`).
-  - [ ] `PinMessageEventDto.java` (`conversationId`, `messageId`, `pinned`, `pinnedById`, `pinnedByName`, `pinnedAt`, `message`).
+- [x] **Sáng:** Mở rộng `MessageRepository.java`:
+  - [x] `findByConversationIdAndIsPinnedTrueOrderByPinnedAtDesc(UUID conversationId)`: Lấy danh sách tin nhắn đã ghim theo thứ tự mới ghim nhất.
+  - [x] `findByConversationIdAndMessageTypeInOrderByCreatedAtDesc(UUID conversationId, List<MessageType> types)`: Truy vấn toàn bộ tin nhắn loại `IMAGE` và `FILE` có `fileUrl != null` trong hội thoại.
+  - [x] Hỗ trợ lọc riêng theo loại `IMAGE` (Ảnh) hoặc `FILE` (Tài liệu) và phân trang (`Pageable`).
+- [x] **Chiều:** Tạo DTOs phản hồi:
+  - [x] `ConversationMediaDto.java` (`messageId`, `senderId`, `senderName`, `messageType`, `fileUrl`, `fileName`, `fileSize`, `createdAt`).
+  - [x] `PinMessageEventDto.java` (`conversationId`, `messageId`, `pinned`, `pinnedById`, `pinnedByName`, `pinnedAt`, `message`).
 
 ### 📅 Ngày 3: Nghiệp vụ Backend & REST APIs (Pin, Important & Media Library)
-- [ ] **Sáng:** Bổ sung các phương thức vào `ChatService.java` và `ChatServiceImpl.java`:
-  - [ ] `togglePinMessage(UUID conversationId, UUID messageId, UUID requesterId, boolean pin)`: Kiểm tra quyền thành viên cuộc trò chuyện, cập nhật trạng thái ghim, tạo tin nhắn hệ thống (`SYSTEM`) thông báo *"Nguyễn Văn A đã ghim một tin nhắn"* và trả về `MessageDto`.
-  - [ ] `getPinnedMessages(UUID conversationId, UUID currentUserId)`: Trả về danh sách tin nhắn đang được ghim.
-  - [ ] `getConversationMedia(UUID conversationId, UUID currentUserId, MessageType filterType)`: Trả về danh sách hình ảnh và tệp đã chia sẻ trong phòng chat.
-- [ ] **Chiều:** Mở các REST API mới trong `ConversationController.java`:
-  - [ ] `POST /api/conversations/{id}/messages/{messageId}/pin`: Ghim tin nhắn (kèm broadcast tới `/topic/chat/{id}/pin` và `/topic/chat/{id}`).
-  - [ ] `DELETE /api/conversations/{id}/messages/{messageId}/pin`: Bỏ ghim tin nhắn (kèm broadcast realtime).
-  - [ ] `GET /api/conversations/{id}/pinned-messages`: Lấy danh sách tin nhắn đã ghim.
-  - [ ] `GET /api/conversations/{id}/media?type=ALL|IMAGE|FILE`: Lấy kho thư viện Media/Files đã chia sẻ trong nhóm chat.
+- [x] **Sáng:** Bổ sung các phương thức vào `ChatService.java` và `ChatServiceImpl.java`:
+  - [x] `togglePinMessage(UUID conversationId, UUID messageId, UUID requesterId, boolean pin)`: Kiểm tra quyền thành viên cuộc trò chuyện, cập nhật trạng thái ghim, tạo tin nhắn hệ thống (`SYSTEM`) thông báo *"Nguyễn Văn A đã ghim một tin nhắn"* và trả về `MessageDto`.
+  - [x] `getPinnedMessages(UUID conversationId, UUID currentUserId)`: Trả về danh sách tin nhắn đang được ghim.
+  - [x] `getConversationMedia(UUID conversationId, UUID currentUserId, MessageType filterType)`: Trả về danh sách hình ảnh và tệp đã chia sẻ trong phòng chat.
+- [x] **Chiều:** Mở các REST API mới trong `ConversationController.java`:
+  - [x] `POST /api/conversations/{id}/messages/{messageId}/pin`: Ghim tin nhắn (kèm broadcast tới `/topic/chat/{id}/pin` và `/topic/chat/{id}`).
+  - [x] `DELETE /api/conversations/{id}/messages/{messageId}/pin`: Bỏ ghim tin nhắn (kèm broadcast realtime).
+  - [x] `GET /api/conversations/{id}/pinned-messages`: Lấy danh sách tin nhắn đã ghim.
+  - [x] `GET /api/conversations/{id}/media?type=ALL|IMAGE|FILE`: Lấy kho thư viện Media/Files đã chia sẻ trong nhóm chat.
 
 ### 📅 Ngày 4: Cập nhật TypeScript Types, Service & WebSocket Pin Sync
-- [ ] **Sáng:** Cập nhật `frontend/src/types/chat.ts`:
-  - [ ] Thêm `isPinned`, `pinnedByName`, `pinnedAt`, `isImportant` vào `Message`.
-  - [ ] Định nghĩa `ConversationMediaItem` và `PinMessageEvent`.
-- [ ] **Sáng:** Cập nhật `frontend/src/services/chatService.ts`:
-  - [ ] Thêm `pinMessage()`, `unpinMessage()`, `getPinnedMessages()`, `getConversationMedia()`.
-- [ ] **Chiều:** Nâng cấp `frontend/src/hooks/useChatWebSocket.ts` và `ChatPage.tsx`:
-  - [ ] Subscribe thêm kênh `/topic/chat/{conversationId}/pin` để đồng bộ tức thì danh sách tin nhắn ghim giữa các thành viên mà không cần F5.
+- [x] **Sáng:** Cập nhật `frontend/src/types/chat.ts`:
+  - [x] Thêm `isPinned`, `pinnedByName`, `pinnedAt`, `isImportant` vào `Message`.
+  - [x] Định nghĩa `ConversationMediaItem` và `PinMessageEvent`.
+- [x] **Sáng:** Cập nhật `frontend/src/services/chatService.ts`:
+  - [x] Thêm `pinMessage()`, `unpinMessage()`, `getPinnedMessages()`, `getConversationMedia()`.
+- [x] **Chiều:** Nâng cấp `frontend/src/hooks/useChatWebSocket.ts` và `ChatPage.tsx`:
+  - [x] Subscribe thêm kênh `/topic/chat/{conversationId}/pin` để đồng bộ tức thì danh sách tin nhắn ghim giữa các thành viên mà không cần F5.
 
 ### 📅 Ngày 5: Thanh Ghim Đầu Khung Chat & Nút Thao tác trên Bong bóng Tin nhắn
-- [ ] **Sáng:** Nâng cấp `ChatWindow.tsx`:
-  - [ ] Thanh **Pinned Message Banner** nổi gọn dưới Header (hiển thị tin nhắn mới ghim nhất kèm số lượng `📌 3 tin nhắn đã ghim`), bấm vào sẽ tự động cuộn tới tin nhắn gốc hoặc mở Drawer danh sách ghim.
-  - [ ] Thanh công cụ nổi (Hover Action Bar) khi rê chuột vào mỗi tin nhắn: Nút **Ghim / Bỏ ghim (`Pin`)**.
-  - [ ] Tùy chọn đánh dấu **"Quan trọng (!)"** trên thanh soạn thảo tin nhắn (hiển thị viền đỏ cam + nhãn `QUAN TRỌNG` nổi bật trên bong bóng chat chuẩn Microsoft Teams).
+- [x] **Sáng:** Nâng cấp `ChatWindow.tsx`:
+  - [x] Thanh **Pinned Message Banner** nổi gọn dưới Header (hiển thị tin nhắn mới ghim nhất kèm số lượng `📌 3 tin nhắn đã ghim`), bấm vào sẽ tự động cuộn tới tin nhắn gốc hoặc mở Drawer danh sách ghim.
+  - [x] Thanh công cụ nổi (Hover Action Bar) khi rê chuột vào mỗi tin nhắn: Nút **Ghim / Bỏ ghim (`Pin`)**.
+  - [x] Tùy chọn đánh dấu **"Quan trọng (!)"** trên thanh soạn thảo tin nhắn (hiển thị viền đỏ cam + nhãn `QUAN TRỌNG` nổi bật trên bong bóng chat chuẩn Microsoft Teams).
 
 ### 📅 Ngày 6: Drawer Bên Phải ("Tệp đã chia sẻ" & "Tin nhắn đã ghim") + Xem trước PDF/Ảnh
-- [ ] **Sáng:** Xây dựng Component `ConversationAssetsDrawer.tsx` (Drawer bên phải khung chat với 2 tab):
-  - [ ] **Tab "Tin nhắn đã ghim":** Hiển thị toàn bộ tin nhắn ghim kèm tên người gửi, thời gian, nút **"Đi tới tin nhắn"** (scroll & highlight) và nút **"Bỏ ghim"**.
-  - [ ] **Tab "Tệp đã chia sẻ":** Chia 2 sub-tab **Hình ảnh** (lưới thumbnail 3 cột đẹp mắt) và **Tài liệu** (danh sách file kèm dung lượng, người gửi, nút Xem trước & Tải xuống).
-- [ ] **Chiều:** Xây dựng Component `FilePreviewModal.tsx`:
-  - [ ] Cho phép xem trước (Preview) **Hình ảnh** (zoom in/out) và **File PDF** (`<iframe>` / `<object>` render trực tiếp nội dung PDF từ `/api/files/{fileName}` mà không cần tải về máy).
-  - [ ] Bổ sung nút mở Drawer ngay trên Header `ChatWindow.tsx` (cạnh nút Tìm kiếm & Thành viên nhóm).
+- [x] **Sáng:** Xây dựng Component `ConversationAssetsDrawer.tsx` (Drawer bên phải khung chat với 2 tab):
+  - [x] **Tab "Tin nhắn đã ghim":** Hiển thị toàn bộ tin nhắn ghim kèm tên người gửi, thời gian, nút **"Đi tới tin nhắn"** (scroll & highlight) và nút **"Bỏ ghim"**.
+  - [x] **Tab "Tệp đã chia sẻ":** Chia 2 sub-tab **Hình ảnh** (lưới thumbnail 3 cột đẹp mắt) và **Tài liệu** (danh sách file kèm dung lượng, người gửi, nút Xem trước & Tải xuống).
+- [x] **Chiều:** Xây dựng Component `FilePreviewModal.tsx`:
+  - [x] Cho phép xem trước (Preview) **Hình ảnh** (zoom in/out) và **File PDF** (`<iframe>` / `<object>` render trực tiếp nội dung PDF từ `/api/files/{fileName}` mà không cần tải về máy).
+  - [x] Bổ sung nút mở Drawer ngay trên Header `ChatWindow.tsx` (cạnh nút Tìm kiếm & Thành viên nhóm).
 
 ### 📅 Ngày 7: Unit Tests, Kiểm thử Tích hợp & Nghiệm thu Sprint 5
-- [ ] **Sáng:** Mở rộng `ChatServiceTest.java`:
-  - [ ] Test ghim & bỏ ghim tin nhắn thành công, chặn người ngoài hội thoại ghim tin nhắn (`403 Forbidden`).
-  - [ ] Test truy vấn thư viện Media/Files phân tách đúng `IMAGE` và `FILE`.
-  - [ ] Test gửi tin nhắn đánh dấu quan trọng (`isImportant = true`).
-- [ ] **Chiều:** Chạy `./mvnw test` đạt 100% PASS và `npm run build` sạch sẽ không lỗi TypeScript.
+- [x] **Sáng:** Mở rộng `ChatServiceTest.java`:
+  - [x] Test ghim & bỏ ghim tin nhắn thành công, chặn người ngoài hội thoại ghim tin nhắn (`403 Forbidden`).
+  - [x] Test truy vấn thư viện Media/Files phân tách đúng `IMAGE` và `FILE`.
+  - [x] Test gửi tin nhắn đánh dấu quan trọng (`isImportant = true`).
+- [x] **Chiều:** Chạy `./mvnw test` đạt 100% PASS và `npm run build` sạch sẽ không lỗi TypeScript.
 
 ---
 
@@ -168,12 +168,12 @@
 
 | Trạng thái | Mã Task | Người phụ trách | Tên công việc chi tiết | Ước lượng | Tiêu chuẩn Hoàn thành (DoD) |
 | :---: | :--- | :---: | :--- | :---: | :--- |
-| [ ] | **W5-TV1-01** | **TV1** | Mở rộng `Message` & DTOs cho Pin / Important / Media | 4h | Bảng `messages` có cột `is_pinned`, `pinned_by`, `pinned_at`, `is_important`. |
-| [ ] | **W5-TV1-02** | **TV1** | Service & REST API Ghim tin nhắn + Broadcast WebSocket | 6h | API Pin/Unpin hoạt động 200 OK; mọi thành viên thấy ghim cập nhật tức thì. |
-| [ ] | **W5-TV1-03** | **TV1** | API Thư viện Media/Files (`GET /api/conversations/{id}/media`) | 4h | Trả về chính xác danh sách ảnh (`IMAGE`) và tài liệu (`FILE`) theo phòng chat. |
-| [ ] | **W5-TV1-04** | **TV1** | Banner Ghim Đầu Khung Chat & Nhãn Tin nhắn Quan trọng | 6h | Rê chuột vào tin nhắn để ghim; gắn cờ `QUAN TRỌNG` nổi bật khi gửi. |
-| [ ] | **W5-TV1-05** | **TV1** | Drawer `"Tệp đã chia sẻ"` & `"Tin nhắn đã ghim"` + Preview Ảnh/PDF | 8h | Chuyển tab mượt mà, xem trước trực tiếp ảnh & file PDF ngay trong ứng dụng. |
-| [ ] | **W5-TV1-06** | **TV1** | Unit Tests cho Pin Message, Important & Media Library | 4h | `ChatServiceTest` xanh 100%, không lỗi build Frontend/Backend. |
+| [x] | **W5-TV1-01** | **TV1** | Mở rộng `Message` & DTOs cho Pin / Important / Media | 4h | Bảng `messages` có cột `is_pinned`, `pinned_by`, `pinned_at`, `is_important`. |
+| [x] | **W5-TV1-02** | **TV1** | Service & REST API Ghim tin nhắn + Broadcast WebSocket | 6h | API Pin/Unpin hoạt động 200 OK; mọi thành viên thấy ghim cập nhật tức thì. |
+| [x] | **W5-TV1-03** | **TV1** | API Thư viện Media/Files (`GET /api/conversations/{id}/media`) | 4h | Trả về chính xác danh sách ảnh (`IMAGE`) và tài liệu (`FILE`) theo phòng chat. |
+| [x] | **W5-TV1-04** | **TV1** | Banner Ghim Đầu Khung Chat & Nhãn Tin nhắn Quan trọng | 6h | Rê chuột vào tin nhắn để ghim; gắn cờ `QUAN TRỌNG` nổi bật khi gửi. |
+| [x] | **W5-TV1-05** | **TV1** | Drawer `"Tệp đã chia sẻ"` & `"Tin nhắn đã ghim"` + Preview Ảnh/PDF | 8h | Chuyển tab mượt mà, xem trước trực tiếp ảnh & file PDF ngay trong ứng dụng. |
+| [x] | **W5-TV1-06** | **TV1** | Unit Tests cho Pin Message, Important & Media Library | 4h | `ChatServiceTest` xanh 100%, không lỗi build Frontend/Backend. |
 | [x] | **W5-TV2-01** | **TV2** | Bổ sung `SCREEN_SHARE_START/STOP` vào Signaling Server | 5h | Truyền tải chính xác trạng thái chia sẻ màn hình 1-1 & phòng họp nhóm. |
 | [x] | **W5-TV2-02** | **TV2** | Tích hợp `getDisplayMedia()` & `replaceTrack` trên WebRTC Client | 8h | Tráo track Camera <-> Màn hình mượt mà không rớt kết nối, xử lý Stop Sharing. |
 | [x] | **W5-TV2-03** | **TV2** | Presentation Layout (Phóng to Màn hình Chia sẻ, Thu nhỏ Camera) | 8h | Tự động chuyển giao diện ưu tiên màn hình chia sẻ cho 1-1 & Mesh nhóm. |

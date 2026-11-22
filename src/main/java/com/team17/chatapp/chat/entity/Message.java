@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -45,4 +46,18 @@ public class Message extends BaseEntity {
 
     @Column(name = "file_size")
     private Long fileSize;
+
+    @Column(name = "is_pinned", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean pinned = false;
+
+    @Column(name = "pinned_by")
+    private UUID pinnedBy;
+
+    @Column(name = "pinned_at")
+    private LocalDateTime pinnedAt;
+
+    @Column(name = "is_important", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean important = false;
 }

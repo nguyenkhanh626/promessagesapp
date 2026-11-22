@@ -5,9 +5,11 @@ import com.team17.chatapp.auth.entity.User;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.dto.AddGroupMembersRequest;
 import com.team17.chatapp.chat.dto.ConversationDto;
+import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PinMessageEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
 import com.team17.chatapp.chat.entity.Conversation;
@@ -418,21 +420,7 @@ public class ChatServiceImpl implements ChatService {
         }
 
         List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-
-        List<UUID> senderIds = messages.stream()
-                .map(Message::getSenderId)
-                .distinct()
-                .collect(Collectors.toList());
-
-        Map<UUID, User> userMap = userRepository.findAllById(senderIds).stream()
-                .collect(Collectors.toMap(User::getId, u -> u));
-
-        return messages.stream().map(msg -> {
-            User sender = userMap.get(msg.getSenderId());
-            String senderName = sender != null ? sender.getDisplayName() : "Thành viên";
-            String senderAvatar = sender != null ? sender.getAvatarUrl() : null;
-            return MessageDto.from(msg, senderName, senderAvatar);
-        }).collect(Collectors.toList());
+        return mapMessagesToDtos(messages);
     }
 
     @Override
@@ -461,12 +449,93 @@ public class ChatServiceImpl implements ChatService {
         return mapMessagesToDtos(matches);
     }
 
-    private List<MessageDto> mapMessagesToDtos(List<Message> messages) {
-        if (messages == null || messages.isEmpty()) {
+    @Override
+    @Transactional
+    public PinMessageEventDto togglePinMessage(UUID conversationId, UUID messageId, UUID requesterId, boolean pin) {
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, requesterId)) {
+            throw new AppException("Bạn không có quyền ghim tin nhắn trong cuộc trò chuyện này", HttpStatus.FORBIDDEN);
+        }
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new AppException("Không tìm thấy tin nhắn cần ghim", HttpStatus.NOT_FOUND));
+
+        if (!message.getConversationId().equals(conversationId)) {
+            throw new AppException("Tin nhắn không thuộc cuộc trò chuyện này", HttpStatus.BAD_REQUEST);
+        }
+
+        if (message.getMessageType() == MessageType.SYSTEM) {
+            throw new AppException("Không thể ghim tin nhắn hệ thống", HttpStatus.BAD_REQUEST);
+        }
+
+        LocalDateTime pinnedAt = pin ? LocalDateTime.now() : null;
+        message.setPinned(pin);
+        message.setPinnedBy(pin ? requesterId : null);
+        message.setPinnedAt(pinnedAt);
+        Message savedMessage = messageRepository.save(message);
+
+        User requester = userRepository.findById(requesterId).orElse(null);
+        String requesterName = requester != null ? requester.getDisplayName() : "Thành viên";
+
+        User sender = userRepository.findById(savedMessage.getSenderId()).orElse(null);
+        String senderName = sender != null ? sender.getDisplayName() : "Thành viên";
+        String senderAvatar = sender != null ? sender.getAvatarUrl() : null;
+
+        MessageDto messageDto = MessageDto.from(
+                savedMessage,
+                senderName,
+                senderAvatar,
+                pin ? requesterName : null
+        );
+
+        log.info("Cập nhật trạng thái ghim tin nhắn {} trong hội thoại {}: pinned={} bởi {}",
+                messageId, conversationId, pin, requesterId);
+
+        return PinMessageEventDto.builder()
+                .conversationId(conversationId)
+                .messageId(messageId)
+                .pinned(pin)
+                .pinnedById(pin ? requesterId : null)
+                .pinnedByName(pin ? requesterName : null)
+                .pinnedAt(pinnedAt)
+                .message(messageDto)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MessageDto> getPinnedMessages(UUID conversationId, UUID currentUserId) {
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, currentUserId)) {
+            throw new AppException("Bạn không có quyền xem tin nhắn ghim của cuộc trò chuyện này", HttpStatus.FORBIDDEN);
+        }
+
+        List<Message> pinnedMessages = messageRepository.findByConversationIdAndPinnedTrueOrderByPinnedAtDesc(conversationId);
+        return mapMessagesToDtos(pinnedMessages);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConversationMediaDto> getConversationMedia(UUID conversationId, UUID currentUserId, MessageType filterType) {
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, currentUserId)) {
+            throw new AppException("Bạn không có quyền xem tệp đã chia sẻ của cuộc trò chuyện này", HttpStatus.FORBIDDEN);
+        }
+
+        List<MessageType> types;
+        if (filterType == MessageType.IMAGE) {
+            types = List.of(MessageType.IMAGE);
+        } else if (filterType == MessageType.FILE) {
+            types = List.of(MessageType.FILE);
+        } else {
+            types = List.of(MessageType.IMAGE, MessageType.FILE);
+        }
+
+        List<Message> mediaMessages = messageRepository
+                .findByConversationIdAndMessageTypeInAndFileUrlIsNotNullOrderByCreatedAtDesc(conversationId, types);
+
+        if (mediaMessages.isEmpty()) {
             return List.of();
         }
 
-        List<UUID> senderIds = messages.stream()
+        List<UUID> senderIds = mediaMessages.stream()
                 .map(Message::getSenderId)
                 .distinct()
                 .collect(Collectors.toList());
@@ -474,11 +543,35 @@ public class ChatServiceImpl implements ChatService {
         Map<UUID, User> userMap = userRepository.findAllById(senderIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
+        return mediaMessages.stream().map(msg -> {
+            User sender = userMap.get(msg.getSenderId());
+            String senderName = sender != null ? sender.getDisplayName() : "Thành viên";
+            String senderAvatar = sender != null ? sender.getAvatarUrl() : null;
+            return ConversationMediaDto.from(msg, senderName, senderAvatar);
+        }).collect(Collectors.toList());
+    }
+
+    private List<MessageDto> mapMessagesToDtos(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return List.of();
+        }
+
+        Set<UUID> userIds = new LinkedHashSet<>();
+        for (Message msg : messages) {
+            if (msg.getSenderId() != null) userIds.add(msg.getSenderId());
+            if (msg.getPinnedBy() != null) userIds.add(msg.getPinnedBy());
+        }
+
+        Map<UUID, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
         return messages.stream().map(msg -> {
             User sender = userMap.get(msg.getSenderId());
             String senderName = sender != null ? sender.getDisplayName() : "Thành viên";
             String senderAvatar = sender != null ? sender.getAvatarUrl() : null;
-            return MessageDto.from(msg, senderName, senderAvatar);
+            User pinner = msg.getPinnedBy() != null ? userMap.get(msg.getPinnedBy()) : null;
+            String pinnedByName = pinner != null ? pinner.getDisplayName() : null;
+            return MessageDto.from(msg, senderName, senderAvatar, pinnedByName);
         }).collect(Collectors.toList());
     }
 
@@ -515,15 +608,17 @@ public class ChatServiceImpl implements ChatService {
                 .fileUrl(request.getFileUrl())
                 .fileName(request.getFileName())
                 .fileSize(request.getFileSize())
+                .important(request.isImportant())
                 .build();
 
         Message savedMessage = messageRepository.save(message);
 
-        String previewContent = switch (type) {
+        String basePreview = switch (type) {
             case IMAGE -> "📷 [Hình ảnh] " + savedMessage.getContent();
             case FILE -> "📎 [Tệp] " + (savedMessage.getFileName() != null ? savedMessage.getFileName() : savedMessage.getContent());
             default -> savedMessage.getContent();
         };
+        String previewContent = savedMessage.isImportant() ? "❗ " + basePreview : basePreview;
 
         conversation.setLastMessageContent(previewContent);
         conversation.setLastMessageAt(savedMessage.getCreatedAt() != null ? savedMessage.getCreatedAt() : LocalDateTime.now());

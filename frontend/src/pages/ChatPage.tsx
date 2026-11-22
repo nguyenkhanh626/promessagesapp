@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ChatSidebar } from '../components/chat/ChatSidebar'
 import { ChatWindow } from '../components/chat/ChatWindow'
+import { ConversationAssetsDrawer } from '../components/chat/ConversationAssetsDrawer'
 import { CreateGroupModal } from '../components/chat/CreateGroupModal'
+import { FilePreviewModal, type PreviewableFile } from '../components/chat/FilePreviewModal'
 import { GroupMembersPanel } from '../components/chat/GroupMembersPanel'
 import { UserDirectoryModal } from '../components/chat/UserDirectoryModal'
 import { chatService } from '../services/chatService'
@@ -9,8 +11,10 @@ import { useAuth } from '../context/AuthContext'
 import { useChatWebSocket } from '../hooks/useChatWebSocket'
 import type {
   Conversation,
+  ConversationMediaItem,
   ConversationMember,
   Message,
+  PinMessageEvent,
   PresenceEvent,
   TypingEvent,
   UserPresenceStatus,
@@ -22,12 +26,18 @@ export const ChatPage: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
+  const [mediaItems, setMediaItems] = useState<ConversationMediaItem[]>([])
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false)
   const [groupMembers, setGroupMembers] = useState<ConversationMember[]>([])
   const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([])
   const [myStatus, setMyStatus] = useState<UserPresenceStatus>(
     (currentUser?.status as UserPresenceStatus) || 'ONLINE'
   )
   const [showMembersPanel, setShowMembersPanel] = useState(false)
+  const [assetsDrawerTab, setAssetsDrawerTab] = useState<'PINNED' | 'MEDIA' | null>(null)
+  const [previewFile, setPreviewFile] = useState<PreviewableFile | null>(null)
+  const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null)
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false)
   const [showDirectoryModal, setShowDirectoryModal] = useState(false)
   const [searchResults, setSearchResults] = useState<User[]>([])
@@ -54,26 +64,38 @@ export const ChatPage: React.FC = () => {
   const activeConversationIdRef = useRef<string | null>(null)
   activeConversationIdRef.current = activeConversation?.id || null
 
-  // 2. Tải lịch sử tin nhắn và danh sách thành viên khi chọn một cuộc trò chuyện
+  // 2. Tải lịch sử tin nhắn, tin nhắn đã ghim, tệp đã chia sẻ & thành viên khi chọn hội thoại
   useEffect(() => {
     setTypingUsers([])
     setMessages([])
+    setPinnedMessages([])
+    setMediaItems([])
     setGroupMembers([])
+    setJumpToMessageId(null)
     if (!activeConversation) {
       setShowMembersPanel(false)
+      setAssetsDrawerTab(null)
       return
     }
 
     let isMounted = true
     async function fetchConversationData() {
+      const convId = activeConversation!.id
+      setIsLoadingMedia(true)
       try {
-        const history = await chatService.getMessages(activeConversation!.id)
+        const [history, pinned, media] = await Promise.all([
+          chatService.getMessages(convId),
+          chatService.getPinnedMessages(convId).catch(() => []),
+          chatService.getConversationMedia(convId, 'ALL').catch(() => []),
+        ])
         if (isMounted) {
           setMessages(history)
+          setPinnedMessages(pinned)
+          setMediaItems(media)
         }
 
         if (activeConversation!.type === 'GROUP') {
-          const members = await chatService.getConversationMembers(activeConversation!.id)
+          const members = await chatService.getConversationMembers(convId)
           if (isMounted) {
             setGroupMembers(members)
           }
@@ -83,6 +105,10 @@ export const ChatPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Không thể tải dữ liệu cuộc trò chuyện:', err)
+      } finally {
+        if (isMounted) {
+          setIsLoadingMedia(false)
+        }
       }
     }
 
@@ -100,16 +126,36 @@ export const ChatPage: React.FC = () => {
         return [...prev, newMsg]
       })
 
+      if ((newMsg.messageType === 'IMAGE' || newMsg.messageType === 'FILE') && newMsg.fileUrl) {
+        setMediaItems((prev) => {
+          if (prev.some((item) => item.messageId === newMsg.id)) return prev
+          const mediaItem: ConversationMediaItem = {
+            messageId: newMsg.id,
+            conversationId: newMsg.conversationId,
+            senderId: newMsg.senderId,
+            senderName: newMsg.senderName,
+            senderAvatarUrl: newMsg.senderAvatarUrl,
+            messageType: newMsg.messageType as 'IMAGE' | 'FILE',
+            fileUrl: newMsg.fileUrl!,
+            fileName: newMsg.fileName || newMsg.content,
+            fileSize: newMsg.fileSize,
+            createdAt: newMsg.createdAt,
+          }
+          return [mediaItem, ...prev]
+        })
+      }
+
       // Khi nhận được tin nhắn mới từ người đang gõ, xóa trạng thái typing của người đó
       setTypingUsers((prev) => prev.filter((t) => t.userId !== newMsg.senderId))
     }
 
-    const previewText =
+    const basePreview =
       newMsg.messageType === 'IMAGE'
         ? `📷 [Hình ảnh] ${newMsg.content}`
         : newMsg.messageType === 'FILE'
           ? `📎 [Tệp] ${newMsg.fileName || newMsg.content}`
           : newMsg.content
+    const previewText = newMsg.important ? `❗ ${basePreview}` : basePreview
 
     setConversations((prev) => {
       const updated = prev.map((c) => {
@@ -196,14 +242,42 @@ export const ChatPage: React.FC = () => {
     }
   }, [])
 
-  // Lắng nghe WebSocket (Chat + Typing + Presence + Nhóm mới)
+  // 7. Xử lý sự kiện Ghim / Bỏ ghim tin nhắn thời gian thực
+  const handlePinEvent = useCallback((event: PinMessageEvent) => {
+    if (!event || event.conversationId !== activeConversationIdRef.current) return
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === event.messageId
+          ? {
+              ...m,
+              pinned: event.pinned,
+              pinnedBy: event.pinnedById,
+              pinnedByName: event.pinnedByName,
+              pinnedAt: event.pinnedAt,
+            }
+          : m
+      )
+    )
+
+    setPinnedMessages((prev) => {
+      const withoutTarget = prev.filter((m) => m.id !== event.messageId)
+      if (event.pinned && event.message) {
+        return [event.message, ...withoutTarget]
+      }
+      return withoutTarget
+    })
+  }, [])
+
+  // Lắng nghe WebSocket (Chat + Typing + Presence + Nhóm mới + Pin)
   const { sendTypingSignal } = useChatWebSocket(
     activeConversation ? activeConversation.id : null,
     token,
     handleIncomingMessage,
     handleTypingEvent,
     handlePresenceEvent,
-    handleConversationUpdate
+    handleConversationUpdate,
+    handlePinEvent
   )
 
   const handleTypingChange = useCallback(
@@ -215,7 +289,7 @@ export const ChatPage: React.FC = () => {
     [activeConversation, sendTypingSignal]
   )
 
-  // 6. Đổi trạng thái hoạt động cá nhân
+  // Đổi trạng thái hoạt động cá nhân
   const handleChangeMyStatus = async (status: UserPresenceStatus) => {
     setMyStatus(status)
     try {
@@ -225,8 +299,12 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 7. Gửi tin nhắn mới (hỗ trợ đính kèm hình ảnh / file)
-  const handleSendMessage = async (content: string, attachmentFile?: File | null) => {
+  // Gửi tin nhắn mới (hỗ trợ đính kèm hình ảnh / file & gắn cờ Quan trọng)
+  const handleSendMessage = async (
+    content: string,
+    attachmentFile?: File | null,
+    important: boolean = false
+  ) => {
     if (!activeConversation) return
     setIsSending(true)
     try {
@@ -238,12 +316,14 @@ export const ChatPage: React.FC = () => {
           fileUrl: uploaded.fileUrl,
           fileName: uploaded.originalFileName,
           fileSize: uploaded.fileSize,
+          important,
         })
         handleIncomingMessage(sentMsg)
       } else if (content) {
         const sentMsg = await chatService.sendMessage(activeConversation.id, {
           content,
           messageType: 'TEXT',
+          important,
         })
         handleIncomingMessage(sentMsg)
       }
@@ -254,7 +334,41 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 8. Tìm kiếm người dùng
+  // Ghim / Bỏ ghim một tin nhắn
+  const handleTogglePinMessage = async (message: Message) => {
+    if (!activeConversation) return
+    try {
+      const event = message.pinned
+        ? await chatService.unpinMessage(activeConversation.id, message.id)
+        : await chatService.pinMessage(activeConversation.id, message.id)
+      handlePinEvent(event)
+    } catch (err) {
+      console.error('Không thể cập nhật trạng thái ghim tin nhắn:', err)
+    }
+  }
+
+  const handleUnpinById = async (messageId: string) => {
+    if (!activeConversation) return
+    try {
+      const event = await chatService.unpinMessage(activeConversation.id, messageId)
+      handlePinEvent(event)
+    } catch (err) {
+      console.error('Không thể bỏ ghim tin nhắn:', err)
+    }
+  }
+
+  // Mở/đóng Drawer bên phải (Tin nhắn đã ghim / Tệp đã chia sẻ)
+  const handleOpenAssetsDrawer = (tab: 'PINNED' | 'MEDIA') => {
+    setShowMembersPanel(false)
+    setAssetsDrawerTab((prev) => (prev === tab ? null : tab))
+  }
+
+  const handleToggleMembersPanel = () => {
+    setAssetsDrawerTab(null)
+    setShowMembersPanel((prev) => !prev)
+  }
+
+  // Tìm kiếm người dùng
   const handleSearchUsers = async (query: string) => {
     setIsSearching(true)
     try {
@@ -267,7 +381,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 9. Bắt đầu chat 1-1 với một người dùng
+  // Bắt đầu chat 1-1 với một người dùng
   const handleStartDirectChat = async (targetUser: User) => {
     try {
       const conversation = await chatService.getOrCreateDirectConversation(targetUser.id)
@@ -284,7 +398,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 10. Tạo nhóm chat mới
+  // Tạo nhóm chat mới
   const handleCreateGroup = async (name: string, memberIds: string[]) => {
     const newGroup = await chatService.createGroupConversation({ name, memberIds })
     setConversations((prev) => [newGroup, ...prev])
@@ -294,7 +408,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 11. Thêm thành viên mới vào nhóm
+  // Thêm thành viên mới vào nhóm
   const handleAddMembers = async (userIds: string[]) => {
     if (!activeConversation) return
     try {
@@ -313,7 +427,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // 12. Xóa thành viên hoặc rời nhóm
+  // Xóa thành viên hoặc rời nhóm
   const handleRemoveMember = async (targetUserId: string) => {
     if (!activeConversation) return
     try {
@@ -362,13 +476,20 @@ export const ChatPage: React.FC = () => {
       <ChatWindow
         conversation={activeConversation}
         messages={messages}
+        pinnedMessages={pinnedMessages}
         currentUser={currentUser}
         onSendMessage={handleSendMessage}
+        onTogglePinMessage={handleTogglePinMessage}
         onTypingChange={handleTypingChange}
         typingUsers={typingUsers}
         isSending={isSending}
         showMembersPanel={showMembersPanel}
-        onToggleMembersPanel={() => setShowMembersPanel((prev) => !prev)}
+        onToggleMembersPanel={handleToggleMembersPanel}
+        assetsDrawerTab={assetsDrawerTab}
+        onOpenAssetsDrawer={handleOpenAssetsDrawer}
+        jumpToMessageId={jumpToMessageId}
+        onClearJumpToMessage={() => setJumpToMessageId(null)}
+        onPreviewFile={(file) => setPreviewFile(file)}
       />
 
       {activeConversation && activeConversation.type === 'GROUP' && showMembersPanel && (
@@ -383,6 +504,22 @@ export const ChatPage: React.FC = () => {
           onSearchUsers={handleSearchUsers}
         />
       )}
+
+      {activeConversation && assetsDrawerTab && (
+        <ConversationAssetsDrawer
+          activeTab={assetsDrawerTab}
+          onTabChange={(tab) => setAssetsDrawerTab(tab)}
+          pinnedMessages={pinnedMessages}
+          mediaItems={mediaItems}
+          isLoadingMedia={isLoadingMedia}
+          onClose={() => setAssetsDrawerTab(null)}
+          onJumpToMessage={(messageId) => setJumpToMessageId(messageId)}
+          onUnpinMessage={handleUnpinById}
+          onPreviewFile={(file) => setPreviewFile(file)}
+        />
+      )}
+
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
       <CreateGroupModal
         isOpen={showCreateGroupModal}

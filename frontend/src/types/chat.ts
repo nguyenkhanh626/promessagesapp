@@ -13,6 +13,11 @@ export interface Message {
   fileUrl?: string
   fileName?: string
   fileSize?: number
+  pinned?: boolean
+  pinnedBy?: string
+  pinnedByName?: string
+  pinnedAt?: string
+  important?: boolean
   createdAt: string
 }
 
@@ -46,6 +51,7 @@ export interface SendMessagePayload {
   fileUrl?: string
   fileName?: string
   fileSize?: number
+  important?: boolean
 }
 
 export interface CreateGroupPayload {
@@ -61,6 +67,29 @@ export interface FileUploadResponse {
   contentType: string
   fileSize: number
   messageType: 'IMAGE' | 'FILE'
+}
+
+export interface ConversationMediaItem {
+  messageId: string
+  conversationId: string
+  senderId: string
+  senderName: string
+  senderAvatarUrl?: string
+  messageType: 'IMAGE' | 'FILE'
+  fileUrl: string
+  fileName: string
+  fileSize?: number
+  createdAt: string
+}
+
+export interface PinMessageEvent {
+  conversationId: string
+  messageId: string
+  pinned: boolean
+  pinnedById?: string
+  pinnedByName?: string
+  pinnedAt?: string
+  message: Message
 }
 
 export interface PresenceEvent {

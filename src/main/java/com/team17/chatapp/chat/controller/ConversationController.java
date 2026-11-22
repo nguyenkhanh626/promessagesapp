@@ -6,15 +6,18 @@ import com.team17.chatapp.auth.entity.UserStatus;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.dto.AddGroupMembersRequest;
 import com.team17.chatapp.chat.dto.ConversationDto;
+import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.DirectConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PinMessageEventDto;
 import com.team17.chatapp.chat.dto.PresenceEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.dto.TypingEventPayload;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.UpdateStatusRequest;
+import com.team17.chatapp.chat.entity.MessageType;
 import com.team17.chatapp.chat.service.ChatService;
 import com.team17.chatapp.chat.service.PresenceService;
 import com.team17.chatapp.common.ApiResponse;
@@ -148,6 +151,59 @@ public class ConversationController {
         User currentUser = getAuthenticatedUser(authentication);
         List<MessageDto> messages = chatService.getAllMessagesAsc(conversationId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(messages));
+    }
+
+    @PostMapping("/conversations/{id}/messages/{messageId}/pin")
+    public ResponseEntity<ApiResponse<PinMessageEventDto>> pinMessage(
+            @PathVariable("id") UUID conversationId,
+            @PathVariable("messageId") UUID messageId,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        PinMessageEventDto event = chatService.togglePinMessage(conversationId, messageId, currentUser.getId(), true);
+        messagingTemplate.convertAndSend("/topic/chat/" + conversationId + "/pin", event);
+        return ResponseEntity.ok(ApiResponse.success("Đã ghim tin nhắn thành công", event));
+    }
+
+    @DeleteMapping("/conversations/{id}/messages/{messageId}/pin")
+    public ResponseEntity<ApiResponse<PinMessageEventDto>> unpinMessage(
+            @PathVariable("id") UUID conversationId,
+            @PathVariable("messageId") UUID messageId,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        PinMessageEventDto event = chatService.togglePinMessage(conversationId, messageId, currentUser.getId(), false);
+        messagingTemplate.convertAndSend("/topic/chat/" + conversationId + "/pin", event);
+        return ResponseEntity.ok(ApiResponse.success("Đã bỏ ghim tin nhắn", event));
+    }
+
+    @GetMapping("/conversations/{id}/pinned-messages")
+    public ResponseEntity<ApiResponse<List<MessageDto>>> getPinnedMessages(
+            @PathVariable("id") UUID conversationId,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        List<MessageDto> pinnedMessages = chatService.getPinnedMessages(conversationId, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(pinnedMessages));
+    }
+
+    @GetMapping("/conversations/{id}/media")
+    public ResponseEntity<ApiResponse<List<ConversationMediaDto>>> getConversationMedia(
+            @PathVariable("id") UUID conversationId,
+            @RequestParam(value = "type", required = false) String type,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        MessageType filterType = null;
+        if (type != null && !type.isBlank() && !"ALL".equalsIgnoreCase(type)) {
+            try {
+                filterType = MessageType.valueOf(type.trim().toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                filterType = null;
+            }
+        }
+        List<ConversationMediaDto> mediaList = chatService.getConversationMedia(conversationId, currentUser.getId(), filterType);
+        return ResponseEntity.ok(ApiResponse.success(mediaList));
     }
 
     @GetMapping("/conversations/{id}/messages/search")

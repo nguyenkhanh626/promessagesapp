@@ -3,11 +3,14 @@ package com.team17.chatapp.chat.service;
 import com.team17.chatapp.auth.dto.UserDto;
 import com.team17.chatapp.chat.dto.AddGroupMembersRequest;
 import com.team17.chatapp.chat.dto.ConversationDto;
+import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PinMessageEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
+import com.team17.chatapp.chat.entity.MessageType;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
@@ -38,6 +41,12 @@ public interface ChatService {
     List<MessageDto> searchMessagesInConversation(UUID conversationId, UUID currentUserId, String keyword);
 
     List<MessageDto> searchAllMyMessages(UUID currentUserId, String keyword);
+
+    PinMessageEventDto togglePinMessage(UUID conversationId, UUID messageId, UUID requesterId, boolean pin);
+
+    List<MessageDto> getPinnedMessages(UUID conversationId, UUID currentUserId);
+
+    List<ConversationMediaDto> getConversationMedia(UUID conversationId, UUID currentUserId, MessageType filterType);
 
     MessageDto saveMessage(UUID conversationId, UUID senderId, SendMessageRequest request);
 

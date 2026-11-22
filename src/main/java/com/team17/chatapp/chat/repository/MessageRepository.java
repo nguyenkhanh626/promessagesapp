@@ -1,6 +1,7 @@
 package com.team17.chatapp.chat.repository;
 
 import com.team17.chatapp.chat.entity.Message;
+import com.team17.chatapp.chat.entity.MessageType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +18,13 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     Page<Message> findByConversationIdOrderByCreatedAtDesc(UUID conversationId, Pageable pageable);
 
     List<Message> findByConversationIdOrderByCreatedAtAsc(UUID conversationId);
+
+    List<Message> findByConversationIdAndPinnedTrueOrderByPinnedAtDesc(UUID conversationId);
+
+    List<Message> findByConversationIdAndMessageTypeInAndFileUrlIsNotNullOrderByCreatedAtDesc(
+            UUID conversationId,
+            List<MessageType> messageTypes
+    );
 
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
            "AND m.messageType <> com.team17.chatapp.chat.entity.MessageType.SYSTEM " +

@@ -2,10 +2,12 @@ import { apiClient } from './apiClient'
 import type { ApiResponse, User } from '../types/auth'
 import type {
   Conversation,
+  ConversationMediaItem,
   ConversationMember,
   CreateGroupPayload,
   FileUploadResponse,
   Message,
+  PinMessageEvent,
   PresenceEvent,
   SendMessagePayload,
   UserPresenceStatus,
@@ -66,6 +68,37 @@ export const chatService = {
 
   async getMessages(conversationId: string): Promise<Message[]> {
     const response = await apiClient.get<ApiResponse<Message[]>>(`/conversations/${conversationId}/messages`)
+    return response.data.data
+  },
+
+  async pinMessage(conversationId: string, messageId: string): Promise<PinMessageEvent> {
+    const response = await apiClient.post<ApiResponse<PinMessageEvent>>(
+      `/conversations/${conversationId}/messages/${messageId}/pin`
+    )
+    return response.data.data
+  },
+
+  async unpinMessage(conversationId: string, messageId: string): Promise<PinMessageEvent> {
+    const response = await apiClient.delete<ApiResponse<PinMessageEvent>>(
+      `/conversations/${conversationId}/messages/${messageId}/pin`
+    )
+    return response.data.data
+  },
+
+  async getPinnedMessages(conversationId: string): Promise<Message[]> {
+    const response = await apiClient.get<ApiResponse<Message[]>>(
+      `/conversations/${conversationId}/pinned-messages`
+    )
+    return response.data.data
+  },
+
+  async getConversationMedia(
+    conversationId: string,
+    type: 'ALL' | 'IMAGE' | 'FILE' = 'ALL'
+  ): Promise<ConversationMediaItem[]> {
+    const response = await apiClient.get<ApiResponse<ConversationMediaItem[]>>(
+      `/conversations/${conversationId}/media?type=${type}`
+    )
     return response.data.data
   },
 

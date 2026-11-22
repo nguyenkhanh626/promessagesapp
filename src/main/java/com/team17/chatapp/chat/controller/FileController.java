@@ -54,7 +54,8 @@ public class FileController {
         Resource resource = fileStorageService.loadFileAsResource(fileName);
         String contentType = fileStorageService.determineContentType(fileName);
 
-        String disposition = download || !contentType.startsWith("image/")
+        boolean inlinePreviewable = contentType.startsWith("image/") || contentType.equalsIgnoreCase("application/pdf");
+        String disposition = download || !inlinePreviewable
                 ? "attachment; filename=\"" + resource.getFilename() + "\""
                 : "inline; filename=\"" + resource.getFilename() + "\"";
 

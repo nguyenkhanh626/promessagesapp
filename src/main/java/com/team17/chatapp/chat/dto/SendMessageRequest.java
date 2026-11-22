@@ -23,6 +23,9 @@ public class SendMessageRequest {
 
     private Long fileSize;
 
+    @Builder.Default
+    private boolean important = false;
+
     public MessageType getMessageType() {
         return messageType != null ? messageType : MessageType.TEXT;
     }

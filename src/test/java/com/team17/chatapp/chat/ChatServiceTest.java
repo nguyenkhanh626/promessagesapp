@@ -6,8 +6,10 @@ import com.team17.chatapp.auth.entity.UserStatus;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.chat.dto.AddGroupMembersRequest;
 import com.team17.chatapp.chat.dto.ConversationDto;
+import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PinMessageEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.entity.Conversation;
 import com.team17.chatapp.chat.entity.ConversationMember;
@@ -329,5 +331,114 @@ class ChatServiceTest {
         assertEquals(1, results.size());
         assertEquals("Báo cáo tiến độ tuần 4", results.get(0).getContent());
         assertEquals("Nguyen Van A", results.get(0).getSenderName());
+    }
+
+    @Test
+    @DisplayName("Tuần 5: Ghim và bỏ ghim tin nhắn trong cuộc trò chuyện thành công")
+    void testTogglePinMessage_Success() {
+        UUID conversationId = sampleGroupConversation.getId();
+        UUID messageId = UUID.randomUUID();
+        Message targetMsg = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user2Id)
+                .content("Tài liệu họp Sprint 5 rất quan trọng")
+                .messageType(MessageType.TEXT)
+                .pinned(false)
+                .build();
+        targetMsg.setId(messageId);
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(targetMsg));
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(user1Id)).thenReturn(Optional.of(user1));
+        when(userRepository.findById(user2Id)).thenReturn(Optional.of(user2));
+
+        PinMessageEventDto pinnedEvent = chatService.togglePinMessage(conversationId, messageId, user1Id, true);
+
+        assertNotNull(pinnedEvent);
+        assertEquals(true, pinnedEvent.isPinned());
+        assertEquals(user1Id, pinnedEvent.getPinnedById());
+        assertEquals("Nguyen Van A", pinnedEvent.getPinnedByName());
+        assertEquals(true, pinnedEvent.getMessage().isPinned());
+
+        PinMessageEventDto unpinnedEvent = chatService.togglePinMessage(conversationId, messageId, user1Id, false);
+        assertEquals(false, unpinnedEvent.isPinned());
+        assertEquals(false, unpinnedEvent.getMessage().isPinned());
+    }
+
+    @Test
+    @DisplayName("Tuần 5: Chặn người không thuộc cuộc trò chuyện ghim tin nhắn")
+    void testTogglePinMessage_NonMember_ThrowsForbidden() {
+        UUID conversationId = sampleGroupConversation.getId();
+        UUID messageId = UUID.randomUUID();
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user3Id)).thenReturn(false);
+
+        AppException ex = assertThrows(AppException.class, () ->
+                chatService.togglePinMessage(conversationId, messageId, user3Id, true)
+        );
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
+    @DisplayName("Tuần 5: Truy vấn thư viện Media/Files đã chia sẻ theo hội thoại")
+    void testGetConversationMedia_Success() {
+        UUID conversationId = sampleGroupConversation.getId();
+        Message imgMsg = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user1Id)
+                .content("diagram.png")
+                .messageType(MessageType.IMAGE)
+                .fileUrl("http://localhost:8080/api/files/diagram.png")
+                .fileName("diagram.png")
+                .fileSize(4096L)
+                .build();
+        imgMsg.setId(UUID.randomUUID());
+
+        Message pdfMsg = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user2Id)
+                .content("spec-week5.pdf")
+                .messageType(MessageType.FILE)
+                .fileUrl("http://localhost:8080/api/files/spec-week5.pdf")
+                .fileName("spec-week5.pdf")
+                .fileSize(20480L)
+                .build();
+        pdfMsg.setId(UUID.randomUUID());
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(messageRepository.findByConversationIdAndMessageTypeInAndFileUrlIsNotNullOrderByCreatedAtDesc(
+                conversationId, List.of(MessageType.IMAGE, MessageType.FILE)))
+                .thenReturn(List.of(imgMsg, pdfMsg));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user1, user2));
+
+        List<ConversationMediaDto> mediaList = chatService.getConversationMedia(conversationId, user1Id, null);
+
+        assertNotNull(mediaList);
+        assertEquals(2, mediaList.size());
+        assertEquals("diagram.png", mediaList.get(0).getFileName());
+        assertEquals("spec-week5.pdf", mediaList.get(1).getFileName());
+    }
+
+    @Test
+    @DisplayName("Tuần 5: Lưu tin nhắn đánh dấu quan trọng (Important) thành công")
+    void testSaveMessage_Important_Success() {
+        UUID conversationId = sampleConversation.getId();
+        SendMessageRequest request = SendMessageRequest.builder()
+                .content("Họp khẩn lúc 15h!")
+                .messageType(MessageType.TEXT)
+                .important(true)
+                .build();
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(sampleConversation));
+        when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(user1Id)).thenReturn(Optional.of(user1));
+
+        MessageDto dto = chatService.saveMessage(conversationId, user1Id, request);
+
+        assertNotNull(dto);
+        assertEquals(true, dto.isImportant());
+        assertEquals("❗ Họp khẩn lúc 15h!", sampleConversation.getLastMessageContent());
     }
 }

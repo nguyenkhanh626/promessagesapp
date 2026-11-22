@@ -1,17 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  Download,
+  AlertCircle,
   Bot,
+  Download,
+  Eye,
   FileText,
+  FolderOpen,
   Image as ImageIcon,
   MessageSquare,
   MoreVertical,
   Paperclip,
   Phone,
+  Pin,
+  PinOff,
   Search,
   Send,
-  Sparkles,
   Smile,
+  Sparkles,
   Users,
   Video,
   X,
@@ -25,6 +30,7 @@ import { chatService } from '../../services/chatService'
 import { STATUS_CONFIG } from './UserDirectoryModal'
 import { AiMessageContent } from './AiMessageContent'
 import { ChatSummaryModal } from './ChatSummaryModal'
+import { isPdfFile, type PreviewableFile } from './FilePreviewModal'
 
 interface AiChatMessage {
   id: string
@@ -36,30 +42,44 @@ interface AiChatMessage {
 interface ChatWindowProps {
   conversation: Conversation | null
   messages: Message[]
+  pinnedMessages?: Message[]
   currentUser: User | null
-  onSendMessage: (content: string, attachmentFile?: File | null) => Promise<void>
+  onSendMessage: (content: string, attachmentFile?: File | null, important?: boolean) => Promise<void>
+  onTogglePinMessage?: (message: Message) => Promise<void>
   onTypingChange?: (typing: boolean) => void
   typingUsers?: TypingEvent[]
   isSending: boolean
   showMembersPanel: boolean
   onToggleMembersPanel: () => void
+  assetsDrawerTab?: 'PINNED' | 'MEDIA' | null
+  onOpenAssetsDrawer?: (tab: 'PINNED' | 'MEDIA') => void
+  jumpToMessageId?: string | null
+  onClearJumpToMessage?: () => void
+  onPreviewFile?: (file: PreviewableFile) => void
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
   messages,
+  pinnedMessages = [],
   currentUser,
   onSendMessage,
+  onTogglePinMessage,
   onTypingChange,
   typingUsers = [],
   isSending,
   showMembersPanel,
   onToggleMembersPanel,
+  assetsDrawerTab = null,
+  onOpenAssetsDrawer,
+  jumpToMessageId = null,
+  onClearJumpToMessage,
+  onPreviewFile,
 }) => {
   const [inputText, setInputText] = useState('')
+  const [isImportant, setIsImportant] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
-  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
   const [aiMessages, setAiMessages] = useState<AiChatMessage[]>([])
   const [aiError, setAiError] = useState<string | null>(null)
   const [isAiSending, setIsAiSending] = useState(false)
@@ -139,12 +159,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setSelectedFile(null)
     setFilePreviewUrl(null)
     setInputText('')
+    setIsImportant(false)
     setShowMessageSearch(false)
     setMessageSearchQuery('')
     setSearchedMessages([])
     setHighlightedMessageId(null)
     isTypingSentRef.current = false
   }, [conversation?.id])
+
+  useEffect(() => {
+    if (jumpToMessageId) {
+      scrollToMessage(jumpToMessageId)
+      onClearJumpToMessage?.()
+    }
+  }, [jumpToMessageId])
 
   useEffect(() => () => aiRequestRef.current?.abort(), [])
 
@@ -285,10 +313,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       return
     }
 
+    const importantFlag = isImportant
     setInputText('')
+    setIsImportant(false)
     clearSelectedFile()
 
-    await onSendMessage(textToSend, fileToSend)
+    await onSendMessage(textToSend, fileToSend, importantFlag)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -437,6 +467,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         {/* Nút thao tác nhanh trên Header */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Nút mở Tab Tin nhắn đã ghim */}
+          {onOpenAssetsDrawer && (
+            <button
+              type="button"
+              onClick={() => onOpenAssetsDrawer('PINNED')}
+              className={`relative h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${
+                assetsDrawerTab === 'PINNED'
+                  ? 'bg-[#5B5FC7] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-[#383838]'
+              }`}
+              title={`Tin nhắn đã ghim (${pinnedMessages.length})`}
+            >
+              <Pin size={17} />
+              {pinnedMessages.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[10px] font-bold text-black flex items-center justify-center">
+                  {pinnedMessages.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Nút mở Tab Tệp đã chia sẻ */}
+          {onOpenAssetsDrawer && (
+            <button
+              type="button"
+              onClick={() => onOpenAssetsDrawer('MEDIA')}
+              className={`h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${
+                assetsDrawerTab === 'MEDIA'
+                  ? 'bg-[#5B5FC7] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-[#383838]'
+              }`}
+              title="Tệp và hình ảnh đã chia sẻ"
+            >
+              <FolderOpen size={17} />
+            </button>
+          )}
+
           {/* Nút tìm kiếm tin nhắn trong hội thoại */}
           <button
             type="button"
@@ -522,6 +589,44 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           >
             Tham gia ngay
           </button>
+        </div>
+      )}
+
+      {/* Banner Tin nhắn đã ghim đầu khung chat */}
+      {pinnedMessages.length > 0 && (
+        <div className="px-6 py-2 bg-[#25242d] border-b border-[#3a3947] flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => scrollToMessage(pinnedMessages[0].id)}
+            className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-90 transition-opacity flex-1"
+            title="Nhấn để cuộn tới tin nhắn đã ghim mới nhất"
+          >
+            <div className="h-7 w-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Pin size={13} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-amber-300">
+                Tin nhắn đã ghim ({pinnedMessages.length})
+              </p>
+              <p className="text-xs text-gray-200 truncate">
+                <span className="font-semibold text-indigo-300">{pinnedMessages[0].senderName}: </span>
+                {pinnedMessages[0].messageType === 'FILE'
+                  ? `📎 ${pinnedMessages[0].fileName || pinnedMessages[0].content}`
+                  : pinnedMessages[0].messageType === 'IMAGE'
+                    ? `📷 ${pinnedMessages[0].fileName || pinnedMessages[0].content}`
+                    : pinnedMessages[0].content}
+              </p>
+            </div>
+          </button>
+          {onOpenAssetsDrawer && (
+            <button
+              type="button"
+              onClick={() => onOpenAssetsDrawer('PINNED')}
+              className="px-2.5 py-1 rounded-lg bg-[#323140] hover:bg-[#414054] text-[11px] font-semibold text-indigo-200 shrink-0 transition-colors"
+            >
+              Xem tất cả
+            </button>
+          )}
         </div>
       )}
 
@@ -685,7 +790,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <div
                 id={`msg-${msg.id}`}
                 key={msg.id}
-                className={`flex items-end gap-2.5 transition-all rounded-xl p-1 ${
+                className={`group flex items-end gap-2.5 transition-all rounded-xl p-1 ${
                   isMe ? 'justify-end' : 'justify-start'
                 } ${isHighlighted ? 'ring-2 ring-amber-400 bg-amber-500/10' : ''}`}
               >
@@ -701,13 +806,49 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   </div>
                 )}
 
+                {isMe && onTogglePinMessage && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePinMessage(msg)}
+                    className={`opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg flex items-center justify-center transition-all shrink-0 mb-1 ${
+                      msg.pinned
+                        ? 'opacity-100 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                        : 'text-gray-400 hover:text-white hover:bg-[#2c2c32]'
+                    }`}
+                    title={msg.pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn'}
+                  >
+                    {msg.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                  </button>
+                )}
+
                 <div
                   className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm shadow-md transition-all ${
-                    isMe
-                      ? 'bg-[#5B5FC7] text-white rounded-br-sm'
-                      : 'bg-[#262626] text-gray-100 rounded-bl-sm border border-[#383838]'
+                    msg.important
+                      ? isMe
+                        ? 'bg-[#5B5FC7] text-white rounded-br-sm border-2 border-rose-400 shadow-rose-500/15'
+                        : 'bg-[#2a2225] text-gray-100 rounded-bl-sm border-2 border-rose-500/70'
+                      : isMe
+                        ? 'bg-[#5B5FC7] text-white rounded-br-sm'
+                        : 'bg-[#262626] text-gray-100 rounded-bl-sm border border-[#383838]'
                   }`}
                 >
+                  {(msg.important || msg.pinned) && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                      {msg.important && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/25 border border-rose-400/50 text-[10px] font-bold text-rose-200 uppercase tracking-wide">
+                          <AlertCircle size={10} />
+                          Quan trọng
+                        </span>
+                      )}
+                      {msg.pinned && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[10px] font-semibold text-amber-200">
+                          <Pin size={10} />
+                          Đã ghim
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {!isMe && (
                     <p className="text-[11px] font-bold text-[#9ba0ff] mb-1">
                       {msg.senderName}
@@ -720,7 +861,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       <img
                         src={msg.fileUrl}
                         alt={msg.fileName || msg.content}
-                        onClick={() => setLightboxImageUrl(msg.fileUrl || null)}
+                        onClick={() =>
+                          onPreviewFile?.({
+                            fileUrl: msg.fileUrl!,
+                            fileName: msg.fileName || msg.content,
+                            messageType: 'IMAGE',
+                            fileSize: msg.fileSize,
+                          })
+                        }
                         className="max-h-72 w-auto object-contain cursor-pointer hover:opacity-95 transition-opacity"
                       />
                     </div>
@@ -750,16 +898,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           )}
                         </div>
                       </div>
-                      <a
-                        href={`${msg.fileUrl}?download=true`}
-                        download={msg.fileName || true}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
-                        title="Tải tệp xuống"
-                      >
-                        <Download size={15} />
-                      </a>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isPdfFile(msg.fileName, msg.fileUrl) && onPreviewFile && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onPreviewFile({
+                                fileUrl: msg.fileUrl!,
+                                fileName: msg.fileName || msg.content,
+                                messageType: 'FILE',
+                                fileSize: msg.fileSize,
+                              })
+                            }
+                            className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors"
+                            title="Xem trước PDF trực tiếp"
+                          >
+                            <Eye size={15} />
+                          </button>
+                        )}
+                        <a
+                          href={`${msg.fileUrl}?download=true`}
+                          download={msg.fileName || true}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                          title="Tải tệp xuống"
+                        >
+                          <Download size={15} />
+                        </a>
+                      </div>
                     </div>
                   )}
 
@@ -778,6 +945,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     {formatMessageTime(msg.createdAt)}
                   </p>
                 </div>
+
+                {!isMe && onTogglePinMessage && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePinMessage(msg)}
+                    className={`opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg flex items-center justify-center transition-all shrink-0 mb-1 ${
+                      msg.pinned
+                        ? 'opacity-100 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                        : 'text-gray-400 hover:text-white hover:bg-[#2c2c32]'
+                    }`}
+                    title={msg.pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn'}
+                  >
+                    {msg.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                  </button>
+                )}
               </div>
             )
           })
@@ -886,7 +1068,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         />
 
         <form onSubmit={handleSend} className="flex items-center gap-2">
-          <div className="flex-1 flex items-center bg-[#181818] border border-[#383838] focus-within:border-[#5B5FC7] rounded-xl px-4 py-2 transition-colors">
+          <div
+            className={`flex-1 flex items-center bg-[#181818] border rounded-xl px-4 py-2 transition-colors ${
+              isImportant
+                ? 'border-rose-500 ring-1 ring-rose-500/40'
+                : 'border-[#383838] focus-within:border-[#5B5FC7]'
+            }`}
+          >
+            {isImportant && (
+              <span className="mr-2 px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-[10px] font-bold text-rose-300 shrink-0">
+                QUAN TRỌNG
+              </span>
+            )}
             <input
               type="text"
               value={inputText}
@@ -901,6 +1094,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none"
             />
             <div className="flex items-center gap-1.5 text-gray-400 shrink-0 ml-2">
+              <button
+                type="button"
+                onClick={() => setIsImportant((prev) => !prev)}
+                className={`p-1 rounded transition-colors ${
+                  isImportant
+                    ? 'bg-rose-500/25 text-rose-300 hover:bg-rose-500/35'
+                    : 'hover:text-white'
+                }`}
+                title={isImportant ? 'Bỏ đánh dấu tin nhắn quan trọng' : 'Đánh dấu tin nhắn quan trọng (!)'}
+              >
+                <AlertCircle size={17} />
+              </button>
               <button
                 type="button"
                 onClick={() => setInputText((current) => (
@@ -950,40 +1155,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </form>
       </div>
 
-      {/* Modal phóng to xem ảnh (Lightbox) */}
-      {lightboxImageUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-6"
-          onClick={() => setLightboxImageUrl(null)}
-        >
-          <div className="relative max-w-4xl max-h-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3 self-end">
-              <a
-                href={`${lightboxImageUrl}?download=true`}
-                download
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-[#262626] hover:bg-[#383838] text-xs font-semibold text-white flex items-center gap-1.5 border border-[#484848]"
-              >
-                <Download size={14} />
-                <span>Tải ảnh gốc</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => setLightboxImageUrl(null)}
-                className="h-8 w-8 rounded-lg bg-[#262626] hover:bg-[#383838] flex items-center justify-center text-white border border-[#484848]"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <img
-              src={lightboxImageUrl}
-              alt="Xem ảnh phóng to"
-              className="max-h-[82vh] max-w-full rounded-xl object-contain shadow-2xl border border-white/10"
-            />
-          </div>
-        </div>
-      )}
       {showSummaryModal && conversation && (
         <ChatSummaryModal
           conversationId={conversation.id}

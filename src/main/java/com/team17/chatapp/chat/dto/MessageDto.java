@@ -26,9 +26,23 @@ public class MessageDto {
     private String fileUrl;
     private String fileName;
     private Long fileSize;
+    private boolean pinned;
+    private UUID pinnedBy;
+    private String pinnedByName;
+    private LocalDateTime pinnedAt;
+    private boolean important;
     private LocalDateTime createdAt;
 
     public static MessageDto from(Message message, String senderName, String senderAvatarUrl) {
+        return from(message, senderName, senderAvatarUrl, null);
+    }
+
+    public static MessageDto from(
+            Message message,
+            String senderName,
+            String senderAvatarUrl,
+            String pinnedByName
+    ) {
         return MessageDto.builder()
                 .id(message.getId())
                 .conversationId(message.getConversationId())
@@ -40,6 +54,11 @@ public class MessageDto {
                 .fileUrl(message.getFileUrl())
                 .fileName(message.getFileName())
                 .fileSize(message.getFileSize())
+                .pinned(message.isPinned())
+                .pinnedBy(message.getPinnedBy())
+                .pinnedByName(pinnedByName)
+                .pinnedAt(message.getPinnedAt())
+                .important(message.isImportant())
                 .createdAt(message.getCreatedAt())
                 .build();
     }

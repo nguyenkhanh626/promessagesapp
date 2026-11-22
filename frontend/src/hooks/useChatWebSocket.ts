@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { Conversation, Message, PresenceEvent, TypingEvent } from '../types/chat'
+import type { Conversation, Message, PinMessageEvent, PresenceEvent, TypingEvent } from '../types/chat'
 
 export function useChatWebSocket(
   conversationId: string | null,
@@ -7,7 +7,8 @@ export function useChatWebSocket(
   onNewMessage: (message: Message) => void,
   onTypingEvent?: (event: TypingEvent) => void,
   onPresenceEvent?: (event: PresenceEvent) => void,
-  onConversationUpdate?: (conversation: Conversation) => void
+  onConversationUpdate?: (conversation: Conversation) => void,
+  onPinEvent?: (event: PinMessageEvent) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectedRef = useRef<boolean>(false)
@@ -67,7 +68,7 @@ export function useChatWebSocket(
             ].join('\n') + '\0'
             socket?.send(subConversationsFrame)
 
-            // 2. Nếu có conversationId -> subscribe kênh chat và kênh typing
+            // 2. Nếu có conversationId -> subscribe kênh chat, typing và pin
             if (conversationId) {
               const subChatFrame = [
                 'SUBSCRIBE',
@@ -84,6 +85,14 @@ export function useChatWebSocket(
                 '\n',
               ].join('\n') + '\0'
               socket?.send(subTypingFrame)
+
+              const subPinFrame = [
+                'SUBSCRIBE',
+                `id:sub-pin-${conversationId}`,
+                `destination:/topic/chat/${conversationId}/pin`,
+                '\n',
+              ].join('\n') + '\0'
+              socket?.send(subPinFrame)
             }
             return
           }
@@ -108,6 +117,10 @@ export function useChatWebSocket(
                 } else if (headersPart.includes('/queue/conversations')) {
                   if (onConversationUpdate && parsed && parsed.id) {
                     onConversationUpdate(parsed as Conversation)
+                  }
+                } else if (headersPart.includes('/pin')) {
+                  if (onPinEvent && parsed && parsed.messageId) {
+                    onPinEvent(parsed as PinMessageEvent)
                   }
                 } else if (headersPart.includes('/typing')) {
                   if (onTypingEvent && parsed && parsed.conversationId) {
@@ -152,8 +165,10 @@ export function useChatWebSocket(
           if (conversationId) {
             const unsubChat = ['UNSUBSCRIBE', `id:sub-${conversationId}`, '\n'].join('\n') + '\0'
             const unsubTyping = ['UNSUBSCRIBE', `id:sub-typing-${conversationId}`, '\n'].join('\n') + '\0'
+            const unsubPin = ['UNSUBSCRIBE', `id:sub-pin-${conversationId}`, '\n'].join('\n') + '\0'
             socket.send(unsubChat)
             socket.send(unsubTyping)
+            socket.send(unsubPin)
           }
           const unsubPresence = ['UNSUBSCRIBE', 'id:sub-presence', '\n'].join('\n') + '\0'
           const unsubConversations = ['UNSUBSCRIBE', 'id:sub-user-conversations', '\n'].join('\n') + '\0'
@@ -165,7 +180,7 @@ export function useChatWebSocket(
       wsRef.current = null
       isConnectedRef.current = false
     }
-  }, [conversationId, token, onNewMessage, onTypingEvent, onPresenceEvent, onConversationUpdate])
+  }, [conversationId, token, onNewMessage, onTypingEvent, onPresenceEvent, onConversationUpdate, onPinEvent])
 
   const sendTypingSignal = useCallback(
     (typing: boolean) => {
