@@ -33,5 +33,9 @@ public enum SignalType {
     USER_JOINED,        // Server broadcast thông báo có người mới vào
     USER_LEFT,          // Server broadcast thông báo có người rời phòng
     ROOM_FULL,          // Phòng họp đã đạt giới hạn tối đa (5 người)
-    ROOM_STATE          // Đồng bộ trạng thái phòng họp
+    ROOM_STATE,         // Đồng bộ trạng thái phòng họp
+
+    // Chia sẻ màn hình (Tuần 5)
+    SCREEN_SHARE_START, // Bắt đầu chia sẻ màn hình
+    SCREEN_SHARE_STOP   // Dừng chia sẻ màn hình
 }

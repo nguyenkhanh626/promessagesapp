@@ -159,7 +159,7 @@ public class SignalingController {
                 case CALL_CANCEL -> callService.cancelCall(roomId);
                 case CALL_TIMEOUT -> callService.timeoutCall(roomId);
                 case CALL_END -> callService.endCall(roomId);
-                case CAMERA_TOGGLE, MIC_TOGGLE, DEVICE_CHANGE -> {
+                case CAMERA_TOGGLE, MIC_TOGGLE, DEVICE_CHANGE, SCREEN_SHARE_START, SCREEN_SHARE_STOP -> {
                     log.info("🎛️ [WebRTC Control] User '{}' gửi tín hiệu {} (Payload: {}, Room: '{}')",
                             sender, message.getType(), message.getPayload(), roomId);
                 }
@@ -278,15 +278,18 @@ public class SignalingController {
         }
 
         // 1. Phản hồi cho người vừa vào danh sách những người ĐANG CÓ MẶT trong phòng
+        String activeScreenSharer = sessionRegistry.getRoomScreenSharer(roomId);
+        Map<String, Object> joinPayload = new HashMap<>();
+        joinPayload.put("participants", existingProfiles);
+        joinPayload.put("maxParticipants", UserSessionRegistry.MAX_ROOM_PARTICIPANTS);
+        joinPayload.put("activeScreenSharerId", activeScreenSharer != null ? activeScreenSharer : "");
+
         SignalMessage existingUsersMsg = SignalMessage.builder()
                 .type(SignalType.JOIN_ROOM)
                 .senderId("SERVER")
                 .roomId(roomId)
                 .receiverId(userId)
-                .payload(Map.of(
-                        "participants", existingProfiles,
-                        "maxParticipants", UserSessionRegistry.MAX_ROOM_PARTICIPANTS
-                ))
+                .payload(joinPayload)
                 .timestamp(Instant.now())
                 .build();
 
@@ -321,6 +324,7 @@ public class SignalingController {
         String roomId = message.getRoomId();
 
         if (roomId != null && userId != null) {
+            sessionRegistry.clearRoomScreenSharer(roomId, userId);
             sessionRegistry.leaveRoom(roomId, userId);
 
             // Broadcast thông báo cho phòng họp người dùng đã rời đi
@@ -341,7 +345,7 @@ public class SignalingController {
     }
 
     /**
-     * Chuyển tiếp trạng thái Media (Bật/Tắt Mic, Camera) trong phòng họp nhóm
+     * Chuyển tiếp trạng thái Media (Bật/Tắt Mic, Camera, Chia sẻ màn hình) trong phòng họp nhóm
      * Client gửi lên: /app/call/room-signal
      */
     @MessageMapping("/call/room-signal")
@@ -354,6 +358,12 @@ public class SignalingController {
 
         if (roomId == null || roomId.isBlank() || userId == null) {
             return;
+        }
+
+        if (message.getType() == SignalType.SCREEN_SHARE_START) {
+            sessionRegistry.setRoomScreenSharer(roomId, userId);
+        } else if (message.getType() == SignalType.SCREEN_SHARE_STOP) {
+            sessionRegistry.clearRoomScreenSharer(roomId, userId);
         }
 
         message.setSenderId(userId);

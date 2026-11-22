@@ -260,4 +260,67 @@ class SignalingControllerTest {
 
         verify(messagingTemplate).convertAndSend(eq("/topic/call/room/group-room-1"), eq(micMsg));
     }
+
+    @Test
+    @DisplayName("Gửi SCREEN_SHARE_START 1-1 -> Chuyển tiếp tín hiệu chia sẻ màn hình tới đối phương")
+    void handleP2PSignal_ScreenShareStart() {
+        SignalMessage shareMsg = SignalMessage.builder()
+                .type(SignalType.SCREEN_SHARE_START)
+                .receiverId("user-callee")
+                .roomId("room-123")
+                .build();
+
+        signalingController.handleP2PSignal(shareMsg, principal);
+
+        verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(shareMsg));
+    }
+
+    @Test
+    @DisplayName("Gửi SCREEN_SHARE_START & STOP trong phòng nhóm -> Cập nhật registry và broadcast")
+    void handleRoomMediaSignal_ScreenShareStartAndStop() {
+        SignalMessage startMsg = SignalMessage.builder()
+                .type(SignalType.SCREEN_SHARE_START)
+                .roomId("group-room-1")
+                .build();
+
+        signalingController.handleRoomMediaSignal(startMsg, principal);
+
+        verify(sessionRegistry).setRoomScreenSharer("group-room-1", "user-sender");
+        verify(messagingTemplate).convertAndSend(eq("/topic/call/room/group-room-1"), eq(startMsg));
+
+        SignalMessage stopMsg = SignalMessage.builder()
+                .type(SignalType.SCREEN_SHARE_STOP)
+                .roomId("group-room-1")
+                .build();
+
+        signalingController.handleRoomMediaSignal(stopMsg, principal);
+
+        verify(sessionRegistry).clearRoomScreenSharer("group-room-1", "user-sender");
+        verify(messagingTemplate).convertAndSend(eq("/topic/call/room/group-room-1"), eq(stopMsg));
+    }
+
+    @Test
+    @DisplayName("Tham gia phòng đang có người chia sẻ màn hình -> JOIN_ROOM chứa activeScreenSharerId")
+    void handleJoinRoom_IncludesActiveScreenSharer() {
+        SignalMessage joinMsg = SignalMessage.builder()
+                .type(SignalType.JOIN_ROOM)
+                .roomId("group-room-share")
+                .build();
+
+        when(sessionRegistry.getRoomParticipants("group-room-share")).thenReturn(java.util.Set.of("user-sharer"));
+        when(sessionRegistry.isRoomFull("group-room-share")).thenReturn(false);
+        when(sessionRegistry.getRoomScreenSharer("group-room-share")).thenReturn("user-sharer");
+
+        signalingController.handleJoinRoom(joinMsg, principal);
+
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("user-sender"),
+                eq("/queue/signals"),
+                org.mockito.ArgumentMatchers.argThat((SignalMessage m) ->
+                        m.getType() == SignalType.JOIN_ROOM
+                                && m.getPayload() instanceof java.util.Map<?, ?> map
+                                && "user-sharer".equals(map.get("activeScreenSharerId"))
+                )
+        );
+    }
 }

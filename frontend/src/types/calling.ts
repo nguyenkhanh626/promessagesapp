@@ -23,6 +23,8 @@ export type SignalType =
   | 'USER_LEFT'
   | 'ROOM_FULL'
   | 'ROOM_STATE'
+  | 'SCREEN_SHARE_START'
+  | 'SCREEN_SHARE_STOP'
 
 /**
  * Chế độ cuộc gọi: 1-1 (DIRECT) hoặc Nhóm (GROUP)
@@ -39,6 +41,7 @@ export interface GroupParticipant {
   stream?: MediaStream | null
   isMuted: boolean
   isCameraOff: boolean
+  isScreenSharing?: boolean
   iceState?: RTCIceConnectionState
 }
 

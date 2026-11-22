@@ -16,11 +16,14 @@ export interface GetMediaOptions {
 export function useMediaStream() {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null)
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null)
   const [isMuted, setIsMuted] = useState<boolean>(false)
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true)
+  const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false)
   const [hasCameraDevice, setHasCameraDevice] = useState<boolean>(true)
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const screenStreamRef = useRef<MediaStream | null>(null)
 
   // Kiểm tra ban đầu xem thiết bị có webcam phần cứng không
   useEffect(() => {
@@ -221,24 +224,106 @@ export function useMediaStream() {
   )
 
   /**
+   * Bắt đầu chia sẻ màn hình (Screen Share) qua getDisplayMedia()
+   */
+  const startScreenShare = useCallback(
+    async (onNativeEnded?: () => void): Promise<MediaStreamTrack | null> => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          setPermissionError('Trình duyệt của bạn không hỗ trợ chia sẻ màn hình.')
+          return null
+        }
+
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            frameRate: { ideal: 30, max: 30 },
+          } as MediaTrackConstraints,
+          audio: false,
+        })
+
+        const screenTrack = displayStream.getVideoTracks()[0]
+        if (!screenTrack) {
+          return null
+        }
+
+        // Dọn dẹp luồng screen cũ nếu có
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach((t) => t.stop())
+        }
+
+        screenStreamRef.current = displayStream
+        setLocalScreenStream(displayStream)
+        setIsScreenSharing(true)
+
+        // Khi người dùng bấm nút "Stop sharing" mặc định của trình duyệt
+        screenTrack.onended = () => {
+          screenStreamRef.current = null
+          setLocalScreenStream(null)
+          setIsScreenSharing(false)
+          onNativeEnded?.()
+        }
+
+        return screenTrack
+      } catch (err: any) {
+        if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
+          console.warn('⚠️ Không thể bắt đầu chia sẻ màn hình:', err)
+          setPermissionError('Không thể bắt đầu chia sẻ màn hình.')
+        }
+        return null
+      }
+    },
+    []
+  )
+
+  /**
+   * Dừng chia sẻ màn hình và trả về track Webcam hiện tại (nếu có) để khôi phục
+   */
+  const stopScreenShare = useCallback((): MediaStreamTrack | null => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => {
+        track.onended = null
+        track.stop()
+      })
+      screenStreamRef.current = null
+    }
+    setLocalScreenStream(null)
+    setIsScreenSharing(false)
+
+    const camTrack = streamRef.current?.getVideoTracks()[0] || null
+    return camTrack
+  }, [])
+
+  /**
    * Dừng toàn bộ các track và giải phóng thiết bị
    */
   const stopStream = useCallback(() => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => {
+        track.onended = null
+        track.stop()
+      })
+      screenStreamRef.current = null
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
     setStream(null)
     setLocalVideoStream(null)
+    setLocalScreenStream(null)
     setIsMuted(false)
     setIsVideoEnabled(true)
+    setIsScreenSharing(false)
   }, [])
 
   return {
     stream,
     localVideoStream,
+    localScreenStream,
     isMuted,
     isVideoEnabled,
+    isScreenSharing,
     hasCameraDevice,
     permissionError,
     getUserMediaStream,
@@ -248,6 +333,8 @@ export function useMediaStream() {
     toggleVideo,
     switchCameraDevice,
     switchMicrophoneDevice,
+    startScreenShare,
+    stopScreenShare,
     stopStream,
   }
 }

@@ -9,26 +9,34 @@ import {
   Minimize,
   Minimize2,
   Settings,
+  MonitorUp,
+  MonitorOff,
 } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
+import { useAuth } from '../../context/AuthContext'
 import { DeviceSettingsModal } from './DeviceSettingsModal'
 
 type PipPosition = 'bottom-right' | 'top-right' | 'bottom-left' | 'top-left'
 
 export const VideoCallView: React.FC = () => {
+  const { user } = useAuth()
   const {
     caller,
     targetUser,
     duration,
     isMuted,
     isVideoEnabled,
+    isScreenSharing,
+    activeScreenSharerId,
     isRemoteCameraOff,
     localVideoStream,
+    localScreenStream,
     remoteStream,
     iceConnectionState,
     endCall,
     toggleMute,
     toggleVideo,
+    toggleScreenShare,
     toggleMinimize,
   } = useCall()
 
@@ -41,20 +49,24 @@ export const VideoCallView: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null)
 
   const activeUser = targetUser || caller
+  const isRemoteScreenSharing = Boolean(
+    activeScreenSharerId && activeScreenSharerId !== (user?.id || 'me')
+  )
+  const activeLocalPreviewStream = isScreenSharing && localScreenStream ? localScreenStream : localVideoStream
 
   // Gắn luồng Remote Stream vào thẻ video đối phương
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream
     }
-  }, [remoteStream])
+  }, [remoteStream, isRemoteScreenSharing])
 
-  // Gắn luồng Local Video Stream vào thẻ video PiP bản thân
+  // Gắn luồng Local Video/Screen Stream vào thẻ video PiP bản thân
   useEffect(() => {
-    if (localVideoRef.current && localVideoStream) {
-      localVideoRef.current.srcObject = localVideoStream
+    if (localVideoRef.current && activeLocalPreviewStream) {
+      localVideoRef.current.srcObject = activeLocalPreviewStream
     }
-  }, [localVideoStream])
+  }, [activeLocalPreviewStream])
 
   // Chuyển đổi toàn màn hình (Fullscreen)
   const handleToggleFullscreen = async () => {
@@ -137,12 +149,14 @@ export const VideoCallView: React.FC = () => {
     >
       {/* Khung Video Đối phương (Remote Video chiếm toàn bộ màn hình) */}
       <div className="relative flex-1 w-full h-full bg-[#181818] overflow-hidden flex items-center justify-center">
-        {remoteStream && !isRemoteCameraOff ? (
+        {remoteStream && (!isRemoteCameraOff || isRemoteScreenSharing) ? (
           <video
             ref={remoteVideoRef}
             autoPlay
             playsInline
-            className="h-full w-full object-cover"
+            className={`h-full w-full ${
+              isRemoteScreenSharing ? 'object-contain bg-[#0b0b0e]' : 'object-cover'
+            }`}
           />
         ) : (
           /* Fallback hiển thị Avatar lớn khi đối phương tắt camera */
@@ -183,19 +197,42 @@ export const VideoCallView: React.FC = () => {
           </div>
         </div>
 
+        {/* Huy hiệu trạng thái chia sẻ màn hình */}
+        {(isRemoteScreenSharing || isScreenSharing) && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 rounded-full bg-[#5B5FC7]/90 backdrop-blur-md px-4 py-1.5 border border-white/20 shadow-lg">
+            <MonitorUp size={15} className="text-white animate-pulse" />
+            <span className="text-xs font-semibold text-white">
+              {isScreenSharing
+                ? 'Bạn đang chia sẻ màn hình'
+                : `Đang xem màn hình của ${activeUser?.displayName || 'đối phương'}`}
+            </span>
+            {isScreenSharing && (
+              <button
+                type="button"
+                onClick={toggleScreenShare}
+                className="ml-1 rounded-full bg-rose-600 hover:bg-rose-500 px-2.5 py-0.5 text-[11px] font-bold text-white transition-colors"
+              >
+                Dừng
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Cửa sổ Video Bản Thân dạng Picture-in-Picture (PiP) */}
         <div
           onClick={cyclePipPosition}
           className={`absolute z-30 h-44 w-32 sm:h-52 sm:w-40 overflow-hidden rounded-2xl border-2 border-[#5B5FC7]/70 bg-[#201f1f] shadow-2xl transition-all duration-300 cursor-pointer hover:border-[#5B5FC7] hover:scale-105 ${pipPositionClasses[pipPosition]}`}
           title="Bấm để chuyển đổi góc màn hình PiP"
         >
-          {isVideoEnabled && localVideoStream ? (
+          {(isScreenSharing && localScreenStream) || (isVideoEnabled && localVideoStream) ? (
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className="h-full w-full object-cover scale-x-[-1]"
+              className={`h-full w-full ${
+                isScreenSharing ? 'object-contain bg-black' : 'object-cover scale-x-[-1]'
+              }`}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center bg-[#242424] p-2 text-center">
@@ -208,7 +245,7 @@ export const VideoCallView: React.FC = () => {
 
           {/* Nhãn nhỏ ở góc PiP */}
           <span className="absolute bottom-1.5 left-2 rounded bg-black/60 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-medium text-white">
-            Bạn
+            {isScreenSharing ? 'Màn hình của bạn' : 'Bạn'}
           </span>
         </div>
       </div>
@@ -242,6 +279,20 @@ export const VideoCallView: React.FC = () => {
             title={isVideoEnabled ? 'Tắt camera (V)' : 'Bật camera (V)'}
           >
             {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
+          </button>
+
+          {/* Nút Chia sẻ màn hình (Screen Share) */}
+          <button
+            type="button"
+            onClick={toggleScreenShare}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl shadow-md transition-all active:scale-95 ${
+              isScreenSharing
+                ? 'bg-emerald-600 text-white hover:bg-emerald-500 ring-2 ring-emerald-400/60'
+                : 'bg-[#2d2d2d] text-gray-200 hover:text-white hover:bg-[#383838]'
+            }`}
+            title={isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'}
+          >
+            {isScreenSharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
           </button>
 
           {/* Nút Cài đặt thiết bị (Mic/Cam/Loa) */}

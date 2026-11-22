@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { MicOff, Pin, PinOff, Volume2 } from 'lucide-react'
+import { MicOff, MonitorUp, Pin, PinOff, Volume2 } from 'lucide-react'
 import type { GroupParticipant } from '../../types/calling'
 import { useVoiceActivity, type VoiceStreamEntry } from '../../hooks/useVoiceActivity'
 
@@ -10,6 +10,8 @@ interface GroupVideoGridProps {
     avatarUrl?: string
   }
   localStream: MediaStream | null
+  localScreenStream?: MediaStream | null
+  activeScreenSharerId?: string | null
   isLocalMuted: boolean
   isLocalCameraOff: boolean
   participants: GroupParticipant[]
@@ -23,6 +25,7 @@ interface TileData {
   isMuted: boolean
   isCameraOff: boolean
   isLocal: boolean
+  isScreenShareTile: boolean
 }
 
 const VideoTile: React.FC<{
@@ -44,20 +47,22 @@ const VideoTile: React.FC<{
     } else {
       el.srcObject = null
     }
-  }, [tile.stream, tile.isCameraOff])
+  }, [tile.stream, tile.isCameraOff, tile.isScreenShareTile])
 
   const hasVideo = Boolean(
     tile.stream &&
-      !tile.isCameraOff &&
+      (!tile.isCameraOff || tile.isScreenShareTile) &&
       tile.stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live')
   )
 
   return (
     <div
       className={`relative rounded-xl overflow-hidden bg-gray-900 border transition-all duration-200 flex items-center justify-center group ${
-        isSpeaking
-          ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-[0_0_20px_rgba(52,211,153,0.3)]'
-          : 'border-white/10'
+        tile.isScreenShareTile
+          ? 'border-[#5B5FC7] ring-2 ring-[#5B5FC7]/70 bg-[#0b0b0e]'
+          : isSpeaking
+            ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-[0_0_20px_rgba(52,211,153,0.3)]'
+            : 'border-white/10'
       } ${className}`}
     >
       {/* Luôn gắn thẻ video cho remote để phát audio ngay cả khi họ tắt camera */}
@@ -66,10 +71,21 @@ const VideoTile: React.FC<{
         autoPlay
         playsInline
         muted={tile.isLocal}
-        className={`w-full h-full object-cover ${tile.isLocal ? 'scale-x-[-1]' : ''} ${
-          hasVideo ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'
-        }`}
+        className={`w-full h-full ${
+          tile.isScreenShareTile
+            ? 'object-contain bg-[#0b0b0e]'
+            : `object-cover ${tile.isLocal ? 'scale-x-[-1]' : ''}`
+        } ${hasVideo ? 'opacity-100' : 'opacity-0 absolute inset-0 pointer-events-none'}`}
       />
+
+      {tile.isScreenShareTile && (
+        <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#5B5FC7]/90 backdrop-blur-md text-white text-xs font-semibold shadow-md">
+          <MonitorUp size={13} />
+          <span>
+            Màn hình của {tile.displayName} {tile.isLocal ? '(Bạn)' : ''}
+          </span>
+        </div>
+      )}
 
       {!hasVideo && (
         <div className="flex flex-col items-center justify-center p-4">
@@ -144,6 +160,8 @@ const VideoTile: React.FC<{
 export const GroupVideoGrid: React.FC<GroupVideoGridProps> = ({
   localUser,
   localStream,
+  localScreenStream,
+  activeScreenSharerId,
   isLocalMuted,
   isLocalCameraOff,
   participants,
@@ -151,32 +169,46 @@ export const GroupVideoGrid: React.FC<GroupVideoGridProps> = ({
   const [pinnedId, setPinnedId] = useState<string | null>(null)
 
   const allTiles: TileData[] = useMemo(() => {
+    const isLocalSharing = Boolean(
+      localScreenStream && activeScreenSharerId === localUser.id
+    )
     const list: TileData[] = [
       {
         id: localUser.id,
         displayName: localUser.displayName,
         avatarUrl: localUser.avatarUrl,
-        stream: localStream,
+        stream: isLocalSharing ? localScreenStream : localStream,
         isMuted: isLocalMuted,
-        isCameraOff: isLocalCameraOff,
+        isCameraOff: isLocalSharing ? false : isLocalCameraOff,
         isLocal: true,
+        isScreenShareTile: isLocalSharing,
       },
     ]
 
     participants.forEach((p) => {
+      const isPeerSharing = Boolean(p.isScreenSharing || activeScreenSharerId === p.userId)
       list.push({
         id: p.userId,
         displayName: p.displayName,
         avatarUrl: p.avatarUrl,
         stream: p.stream,
         isMuted: p.isMuted,
-        isCameraOff: p.isCameraOff,
+        isCameraOff: isPeerSharing ? false : p.isCameraOff,
         isLocal: false,
+        isScreenShareTile: isPeerSharing,
       })
     })
 
     return list
-  }, [localUser, localStream, isLocalMuted, isLocalCameraOff, participants])
+  }, [
+    localUser,
+    localStream,
+    localScreenStream,
+    activeScreenSharerId,
+    isLocalMuted,
+    isLocalCameraOff,
+    participants,
+  ])
 
   // Nếu người đang ghim rời phòng thì bỏ ghim
   useEffect(() => {
@@ -201,7 +233,11 @@ export const GroupVideoGrid: React.FC<GroupVideoGridProps> = ({
     setPinnedId((prev) => (prev === id ? null : id))
   }
 
-  const pinnedTile = pinnedId ? allTiles.find((t) => t.id === pinnedId) : null
+  // Tự động ưu tiên Spotlight cho thành viên đang chia sẻ màn hình (hoặc người được ghim thủ công)
+  const effectiveSpotlightId = pinnedId || activeScreenSharerId || null
+  const pinnedTile = effectiveSpotlightId
+    ? allTiles.find((t) => t.id === effectiveSpotlightId)
+    : null
   const otherTiles = pinnedTile ? allTiles.filter((t) => t.id !== pinnedTile.id) : allTiles
 
   // Chế độ Spotlight (có 1 ô được Ghim)

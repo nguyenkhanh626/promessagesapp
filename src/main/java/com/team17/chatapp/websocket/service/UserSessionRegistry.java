@@ -27,6 +27,9 @@ public class UserSessionRegistry {
     // roomId -> Set<userId> (Danh sách người tham gia trong từng phòng gọi)
     private final ConcurrentHashMap<String, Set<String>> roomParticipantsMap = new ConcurrentHashMap<>();
 
+    // roomId -> userId (Người dùng hiện đang chia sẻ màn hình trong phòng gọi)
+    private final ConcurrentHashMap<String, String> roomScreenSharerMap = new ConcurrentHashMap<>();
+
     /**
      * Đăng ký một phiên kết nối mới
      */
@@ -107,17 +110,50 @@ public class UserSessionRegistry {
      */
     public void leaveRoom(String roomId, String userId) {
         if (roomId == null || userId == null) return;
+        clearRoomScreenSharer(roomId, userId);
         Set<String> participants = roomParticipantsMap.get(roomId);
         if (participants != null) {
             participants.remove(userId);
             if (participants.isEmpty()) {
                 roomParticipantsMap.remove(roomId);
+                roomScreenSharerMap.remove(roomId);
                 log.info("[SessionRegistry] Phòng gọi '{}' đã đóng do không còn thành viên.", roomId);
             } else {
                 log.info("[SessionRegistry] User '{}' đã rời phòng gọi '{}'. Còn lại {} thành viên.",
                         userId, roomId, participants.size());
             }
         }
+    }
+
+    /**
+     * Đặt người dùng đang chia sẻ màn hình trong phòng gọi
+     */
+    public void setRoomScreenSharer(String roomId, String userId) {
+        if (roomId == null || userId == null) return;
+        roomScreenSharerMap.put(roomId, userId);
+        log.info("[SessionRegistry] User '{}' bắt đầu chia sẻ màn hình trong phòng '{}'.", userId, roomId);
+    }
+
+    /**
+     * Xóa trạng thái chia sẻ màn hình của phòng gọi nếu userId trùng với người đang chia sẻ
+     */
+    public void clearRoomScreenSharer(String roomId, String userId) {
+        if (roomId == null || userId == null) return;
+        roomScreenSharerMap.computeIfPresent(roomId, (k, currentSharer) -> {
+            if (currentSharer.equals(userId)) {
+                log.info("[SessionRegistry] User '{}' đã dừng chia sẻ màn hình trong phòng '{}'.", userId, roomId);
+                return null;
+            }
+            return currentSharer;
+        });
+    }
+
+    /**
+     * Lấy userId của thành viên đang chia sẻ màn hình trong phòng (hoặc null nếu không có)
+     */
+    public String getRoomScreenSharer(String roomId) {
+        if (roomId == null) return null;
+        return roomScreenSharerMap.get(roomId);
     }
 
     /**
@@ -165,9 +201,11 @@ public class UserSessionRegistry {
     private void removeUserFromAllRooms(String userId) {
         roomParticipantsMap.forEach((roomId, participants) -> {
             if (participants.remove(userId)) {
+                clearRoomScreenSharer(roomId, userId);
                 log.info("[SessionRegistry] Đã tự động dọn dẹp User '{}' khỏi phòng '{}' do mất kết nối.", userId, roomId);
                 if (participants.isEmpty()) {
                     roomParticipantsMap.remove(roomId);
+                    roomScreenSharerMap.remove(roomId);
                 }
             }
         });

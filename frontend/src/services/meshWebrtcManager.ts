@@ -21,6 +21,7 @@ export class MeshWebRtcManager {
   private remoteStreams: Map<string, MediaStream> = new Map()
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
   private localStream: MediaStream | null = null
+  private activeScreenTrack: MediaStreamTrack | null = null
 
   public setLocalStream(stream: MediaStream | null) {
     this.localStream = stream
@@ -43,11 +44,21 @@ export class MeshWebRtcManager {
     this.peers.set(peerId, pc)
     this.remoteStreams.set(peerId, remoteStream)
 
-    // Đưa các track local vào PeerConnection
+    // Đưa các track local vào PeerConnection (ưu tiên track chia sẻ màn hình nếu đang bật)
     if (this.localStream) {
+      let hasVideoAdded = false
       this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!)
+        if (track.kind === 'video' && this.activeScreenTrack) {
+          pc.addTrack(this.activeScreenTrack, this.localStream!)
+          hasVideoAdded = true
+        } else {
+          pc.addTrack(track, this.localStream!)
+          if (track.kind === 'video') hasVideoAdded = true
+        }
       })
+      if (!hasVideoAdded && this.activeScreenTrack) {
+        pc.addTrack(this.activeScreenTrack, this.localStream)
+      }
     }
 
     pc.onicecandidate = (event) => {
@@ -147,17 +158,30 @@ export class MeshWebRtcManager {
    */
   public async replaceTrackForAllPeers(
     kind: 'audio' | 'video',
-    newTrack: MediaStreamTrack
+    newTrack: MediaStreamTrack | null,
+    isScreenShare = false
   ): Promise<void> {
+    if (kind === 'video') {
+      this.activeScreenTrack = isScreenShare ? newTrack : null
+    }
+
     const tasks: Promise<void>[] = []
     this.peers.forEach((pc, peerId) => {
-      const sender = pc.getSenders().find((s) => s.track?.kind === kind)
+      const sender = pc
+        .getSenders()
+        .find((s) => s.track?.kind === kind || (kind === 'video' && s.track === null))
       if (sender) {
         tasks.push(
           sender.replaceTrack(newTrack).catch((err) => {
             console.warn(`⚠️ Lỗi thay thế ${kind} track cho peer '${peerId}':`, err)
           })
         )
+      } else if (newTrack && kind === 'video') {
+        try {
+          pc.addTrack(newTrack, this.localStream || new MediaStream([newTrack]))
+        } catch (err) {
+          console.warn(`⚠️ Lỗi thêm video track cho peer '${peerId}':`, err)
+        }
       }
     })
     await Promise.all(tasks)
@@ -185,6 +209,7 @@ export class MeshWebRtcManager {
   public closeAll() {
     Array.from(this.peers.keys()).forEach((peerId) => this.removePeer(peerId))
     this.localStream = null
+    this.activeScreenTrack = null
   }
 }
 

@@ -92,10 +92,10 @@ export class WebRtcManager {
   }
 
   /**
-   * Thay thế Video Track trực tiếp khi người dùng chuyển đổi Camera
+   * Thay thế Video Track trực tiếp khi người dùng chuyển đổi Camera hoặc Chia sẻ màn hình
    * mà không cần tạo lại phiên đàm phán WebRTC (No Renegotiation)
    */
-  public async replaceVideoTrack(newTrack: MediaStreamTrack): Promise<boolean> {
+  public async replaceVideoTrack(newTrack: MediaStreamTrack | null): Promise<boolean> {
     if (!this.peerConnection) return false
 
     const senders = this.peerConnection.getSenders()
@@ -103,11 +103,12 @@ export class WebRtcManager {
 
     if (videoSender) {
       await videoSender.replaceTrack(newTrack)
-      console.log('🎥 [WebRTC] Đã thay thế Video Track thành công:', newTrack.label)
+      console.log('🎥 [WebRTC] Đã thay thế Video Track thành công:', newTrack?.label || 'null')
       return true
-    } else if (this.localStream) {
-      // Nếu chưa có sender video, thêm mới track
-      this.peerConnection.addTrack(newTrack, this.localStream)
+    } else if (newTrack) {
+      // Nếu chưa có sender video (ví dụ cuộc gọi bắt đầu là Audio-only), thêm mới track
+      const targetStream = this.localStream || new MediaStream([newTrack])
+      this.peerConnection.addTrack(newTrack, targetStream)
       return true
     }
     return false

@@ -1,5 +1,17 @@
 import React, { useState } from 'react'
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Minimize2, Settings, Users, PenTool } from 'lucide-react'
+import {
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  PhoneOff,
+  Minimize2,
+  Settings,
+  Users,
+  PenTool,
+  MonitorUp,
+  MonitorOff,
+} from 'lucide-react'
 import { useCall } from '../../context/CallContext'
 import { useAuth } from '../../context/AuthContext'
 import { VideoCallView } from './VideoCallView'
@@ -20,12 +32,16 @@ export const ActiveCallModal: React.FC = () => {
     duration,
     isMuted,
     isVideoEnabled,
+    isScreenSharing,
+    activeScreenSharerId,
     localVideoStream,
+    localScreenStream,
     isMinimized,
     cancelCall,
     endCall,
     toggleMute,
     toggleVideo,
+    toggleScreenShare,
     toggleMinimize,
   } = useCall()
 
@@ -95,6 +111,8 @@ export const ActiveCallModal: React.FC = () => {
                       avatarUrl: user?.avatarUrl,
                     }}
                     localStream={localVideoStream}
+                    localScreenStream={localScreenStream}
+                    activeScreenSharerId={activeScreenSharerId}
                     isLocalMuted={isMuted}
                     isLocalCameraOff={!isVideoEnabled}
                     participants={participants}
@@ -112,6 +130,8 @@ export const ActiveCallModal: React.FC = () => {
                   avatarUrl: user?.avatarUrl,
                 }}
                 localStream={localVideoStream}
+                localScreenStream={localScreenStream}
+                activeScreenSharerId={activeScreenSharerId}
                 isLocalMuted={isMuted}
                 isLocalCameraOff={!isVideoEnabled}
                 participants={participants}
@@ -120,7 +140,7 @@ export const ActiveCallModal: React.FC = () => {
           </div>
 
           {/* Thanh điều khiển dưới cùng */}
-          <div className="h-20 px-6 flex items-center justify-center gap-4 border-t border-white/10 bg-[#1b1b1f] shrink-0">
+          <div className="h-20 px-6 flex items-center justify-center gap-3 sm:gap-4 border-t border-white/10 bg-[#1b1b1f] shrink-0">
             <button
               type="button"
               onClick={() => setWhiteboardTarget(showWhiteboard ? null : targetUser)}
@@ -163,6 +183,19 @@ export const ActiveCallModal: React.FC = () => {
 
             <button
               type="button"
+              onClick={toggleScreenShare}
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-all shadow-md ${
+                isScreenSharing
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-500 ring-2 ring-emerald-400/60'
+                  : 'bg-[#2c2c32] text-white hover:bg-[#383840]'
+              }`}
+              title={isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'}
+            >
+              {isScreenSharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsSettingsOpen(true)}
               className="h-12 w-12 rounded-full flex items-center justify-center bg-[#2c2c32] text-gray-200 hover:bg-[#383840] transition-all shadow-md"
               title="Cài đặt thiết bị Audio/Video"
@@ -190,8 +223,8 @@ export const ActiveCallModal: React.FC = () => {
     )
   }
 
-  // Khi đang đàm thoại cuộc gọi Video 1-1 -> Hiển thị VideoCallView toàn diện
-  if (callType === 'VIDEO' && callStatus === 'CONNECTED') {
+  // Khi đang đàm thoại cuộc gọi Video 1-1 (hoặc đang chia sẻ màn hình trong cuộc gọi 1-1) -> Hiển thị VideoCallView toàn diện
+  if ((callType === 'VIDEO' || isScreenSharing || Boolean(activeScreenSharerId)) && callStatus === 'CONNECTED') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in p-2 sm:p-6">
         <div className="relative w-full h-full max-w-6xl max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl border border-[#383838]">
@@ -293,6 +326,24 @@ export const ActiveCallModal: React.FC = () => {
                   {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
                 </button>
                 <span className="text-xs text-gray-400">{isMuted ? 'Đã tắt mic' : 'Micro'}</span>
+              </div>
+
+              <div className="flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={toggleScreenShare}
+                  className={`flex h-12 w-12 items-center justify-center rounded-full transition-all shadow-md active:scale-95 ${
+                    isScreenSharing
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-[#292929] hover:bg-[#383838] text-gray-200'
+                  }`}
+                  title={isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'}
+                >
+                  {isScreenSharing ? <MonitorOff size={20} /> : <MonitorUp size={20} />}
+                </button>
+                <span className="text-xs text-gray-400">
+                  {isScreenSharing ? 'Đang chia sẻ' : 'Chia sẻ'}
+                </span>
               </div>
 
               <div className="flex flex-col items-center gap-1.5">

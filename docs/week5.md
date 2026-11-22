@@ -9,10 +9,10 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 5
 
-- [ ] **Tiến độ chung toàn đội:** `0%`
+- [ ] **Tiến độ chung toàn đội:** `64%` (Phân hệ Chia sẻ màn hình của TV2 và Bảng vẽ Split-screen + AI Summarizer của TV3 đã hoàn thành 100%)
 - [ ] **Mục tiêu 1 (TV1):** Tính năng Ghim tin nhắn (`PinnedMessages`), Đánh dấu tin nhắn quan trọng, Thư viện Tệp/Media đã chia sẻ (`GET /api/conversations/{id}/media`), Drawer tab bên phải khung chat & Xem trước Ảnh/PDF trực tiếp.
-- [ ] **Mục tiêu 2 (TV2):** Báo hiệu Chia sẻ màn hình qua Signaling Server (`SCREEN_SHARE`), Tích hợp `getDisplayMedia()` cho cả gọi 1-1 và Mesh nhóm, Layout ưu tiên phóng to màn hình đang chia sẻ.
-- [ ] **Mục tiêu 3 (TV3):** Chế độ Bảng vẽ ngay trong cuộc họp (Split-screen Video + Whiteboard), Xuất bảng vẽ ra ảnh PNG/PDF và API + UI Tóm tắt cuộc trò chuyện AI (Chat Summarizer & Action Items).
+- [x] **Mục tiêu 2 (TV2):** Báo hiệu Chia sẻ màn hình qua Signaling Server (`SCREEN_SHARE`), Tích hợp `getDisplayMedia()` cho cả gọi 1-1 và Mesh nhóm, Layout ưu tiên phóng to màn hình đang chia sẻ. - **ĐÃ HOÀN THÀNH 100%**
+- [x] **Mục tiêu 3 (TV3):** Chế độ Bảng vẽ ngay trong cuộc họp (Split-screen Video + Whiteboard), Xuất bảng vẽ ra ảnh PNG/PDF và API + UI Tóm tắt cuộc trò chuyện AI (Chat Summarizer & Action Items). - **ĐÃ HOÀN THÀNH 100%**
 > ⚠️ *Lưu ý đầu tuần cho TV3:* Phần bot `@AI-Assistant` và SSE đã được triển khai ở Tuần 4; xác nhận `GEMINI_API_KEY` hoạt động trước khi ghép nối luồng Chat Summarizer của Tuần 5.
 
 ---
@@ -85,39 +85,39 @@
 > **Trọng tâm:** Xây dựng tính năng Chia sẻ màn hình (Screen Share) qua WebRTC `getDisplayMedia()`, đồng bộ tín hiệu qua Signaling Server (`SCREEN_SHARE`) cho cả cuộc gọi 1-1 lẫn cuộc họp nhóm, và thiết kế bố cục Presentation ưu tiên phóng to màn hình được chia sẻ.
 
 ### 📅 Ngày 1: Mở rộng Giao thức Signaling cho Chia sẻ Màn hình
-- [ ] **Sáng:** Cập nhật `SignalType.java`:
-  - [ ] Thêm `SCREEN_SHARE_START` (bắt đầu chia sẻ màn hình) và `SCREEN_SHARE_STOP` (dừng chia sẻ màn hình).
-- [ ] **Chiều:** Nâng cấp `SignalMessage.java` & `SignalingController.java`:
-  - [ ] Hỗ trợ chuyển tiếp tín hiệu chia sẻ màn hình trong cuộc gọi 1-1 (`/app/call/signal` -> `/user/queue/signals`) và phòng họp nhóm (`/app/call/room-signal` -> `/topic/call/room/{roomId}`).
-  - [ ] Cập nhật `UserSessionRegistry.java` lưu `activeScreenSharerId` cho từng phòng gọi để người mới vào phòng nhận biết ngay ai đang chia sẻ màn hình.
+- [x] **Sáng:** Cập nhật `SignalType.java`:
+  - [x] Thêm `SCREEN_SHARE_START` (bắt đầu chia sẻ màn hình) và `SCREEN_SHARE_STOP` (dừng chia sẻ màn hình).
+- [x] **Chiều:** Nâng cấp `SignalMessage.java` & `SignalingController.java`:
+  - [x] Hỗ trợ chuyển tiếp tín hiệu chia sẻ màn hình trong cuộc gọi 1-1 (`/app/call/signal` -> `/user/queue/signals`) và phòng họp nhóm (`/app/call/room-signal` -> `/topic/call/room/{roomId}`).
+  - [x] Cập nhật `UserSessionRegistry.java` lưu `activeScreenSharerId` cho từng phòng gọi để người mới vào phòng nhận biết ngay ai đang chia sẻ màn hình.
 
 ### 📅 Ngày 2: Nâng cấp `useMediaStream` hỗ trợ `getDisplayMedia()`
-- [ ] **Sáng:** Cập nhật `frontend/src/hooks/useMediaStream.ts`:
-  - [ ] Xây dựng hàm `startScreenShare()`: Gọi `navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false })` để lấy màn hình hoặc cửa sổ ứng dụng.
-  - [ ] Xử lý sự kiện `videoTrack.onended` (khi người dùng bấm nút *"Stop sharing"* mặc định của trình duyệt) để tự động dọn dẹp state và khôi phục lại Webcam.
-  - [ ] Viết hàm `stopScreenShare()` giải phóng toàn bộ track màn hình.
-- [ ] **Chiều:** Cập nhật `frontend/src/types/calling.ts`:
-  - [ ] Thêm `isScreenSharing`, `screenShareUserId`, `screenStream` vào trạng thái cuộc gọi và `GroupParticipant`.
+- [x] **Sáng:** Cập nhật `frontend/src/hooks/useMediaStream.ts`:
+  - [x] Xây dựng hàm `startScreenShare()`: Gọi `navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false })` để lấy màn hình hoặc cửa sổ ứng dụng.
+  - [x] Xử lý sự kiện `videoTrack.onended` (khi người dùng bấm nút *"Stop sharing"* mặc định của trình duyệt) để tự động dọn dẹp state và khôi phục lại Webcam.
+  - [x] Viết hàm `stopScreenShare()` giải phóng toàn bộ track màn hình.
+- [x] **Chiều:** Cập nhật `frontend/src/types/calling.ts`:
+  - [x] Thêm `isScreenSharing`, `screenShareUserId`, `screenStream` vào trạng thái cuộc gọi và `GroupParticipant`.
 
 ### 📅 Ngày 3: Thay thế Video Track Không Gián đoạn qua WebRTC (`replaceTrack`)
-- [ ] **Sáng:** Nâng cấp `webrtcManager.ts` (gọi 1-1) & `meshWebrtcManager.ts` (gọi nhóm):
-  - [ ] Sử dụng `RTCRtpSender.replaceTrack()` (hoặc `replaceTrackForAllPeers()`) để tráo đổi track gửi đi giữa **Webcam track** và **Screen Share track** mà không phải đàm phán lại toàn bộ SDP hoặc ngắt kết nối P2P.
-  - [ ] Trường hợp cuộc gọi ban đầu là Audio-only (chưa có video sender), tự động đàm phán lại (`renegotiate` gửi `CALL_OFFER`) khi bật chia sẻ màn hình.
-- [ ] **Chiều:** Tích hợp vào `CallContext.tsx`:
-  - [ ] Expose hàm `toggleScreenShare()`, biến `isScreenSharing` và `activeScreenSharerId`.
-  - [ ] Gửi tín hiệu `SCREEN_SHARE_START` / `SCREEN_SHARE_STOP` qua `signalingService.ts` khi bật/tắt chia sẻ.
+- [x] **Sáng:** Nâng cấp `webrtcManager.ts` (gọi 1-1) & `meshWebrtcManager.ts` (gọi nhóm):
+  - [x] Sử dụng `RTCRtpSender.replaceTrack()` (hoặc `replaceTrackForAllPeers()`) để tráo đổi track gửi đi giữa **Webcam track** và **Screen Share track** mà không phải đàm phán lại toàn bộ SDP hoặc ngắt kết nối P2P.
+  - [x] Trường hợp cuộc gọi ban đầu là Audio-only (chưa có video sender), tự động đàm phán lại (`renegotiate` gửi `CALL_OFFER`) khi bật chia sẻ màn hình.
+- [x] **Chiều:** Tích hợp vào `CallContext.tsx`:
+  - [x] Expose hàm `toggleScreenShare()`, biến `isScreenSharing` và `activeScreenSharerId`.
+  - [x] Gửi tín hiệu `SCREEN_SHARE_START` / `SCREEN_SHARE_STOP` qua `signalingService.ts` khi bật/tắt chia sẻ.
 
 ### 📅 Ngày 4-5: Giao diện Presentation (Phóng to Màn hình Chia sẻ, Thu nhỏ Camera)
-- [ ] **Sáng (Ngày 4):** Cập nhật `VideoCallView.tsx` (Cuộc gọi 1-1):
-  - [ ] Khi có người chia sẻ màn hình: Đặt video màn hình chia sẻ chiếm **toàn bộ vùng trung tâm** (`object-contain` để không bị cắt mất chữ/góc màn hình), thu nhỏ video camera người nói thành dải PiP gọn ở góc dưới.
-  - [ ] Hiển thị nhãn thông báo *"Đang xem màn hình của [Tên người chia sẻ]"* hoặc *"Bạn đang chia sẻ màn hình"*.
-- [ ] **Chiều (Ngày 4) & Ngày 5:** Cập nhật `GroupVideoGrid.tsx` (Cuộc họp nhóm):
-  - [ ] Tự động chuyển sang **Presentation Layout** khi nhận tín hiệu `activeScreenSharerId`: Khung màn hình chia sẻ chiếm 75–80% không gian chính, thanh camera các thành viên còn lại xếp gọn thành dải cuộn (filmstrip) ở cạnh phải hoặc cạnh dưới.
-  - [ ] Bổ sung nút **"Chia sẻ màn hình (`MonitorUp` / `ScreenShareOff`)"** trên thanh điều khiển `ActiveCallModal.tsx`.
+- [x] **Sáng (Ngày 4):** Cập nhật `VideoCallView.tsx` (Cuộc gọi 1-1):
+  - [x] Khi có người chia sẻ màn hình: Đặt video màn hình chia sẻ chiếm **toàn bộ vùng trung tâm** (`object-contain` để không bị cắt mất chữ/góc màn hình), thu nhỏ video camera người nói thành dải PiP gọn ở góc dưới.
+  - [x] Hiển thị nhãn thông báo *"Đang xem màn hình của [Tên người chia sẻ]"* hoặc *"Bạn đang chia sẻ màn hình"*.
+- [x] **Chiều (Ngày 4) & Ngày 5:** Cập nhật `GroupVideoGrid.tsx` (Cuộc họp nhóm):
+  - [x] Tự động chuyển sang **Presentation Layout** khi nhận tín hiệu `activeScreenSharerId`: Khung màn hình chia sẻ chiếm 75–80% không gian chính, thanh camera các thành viên còn lại xếp gọn thành dải cuộn (filmstrip) ở cạnh phải hoặc cạnh dưới.
+  - [x] Bổ sung nút **"Chia sẻ màn hình (`MonitorUp` / `ScreenShareOff`)"** trên thanh điều khiển `ActiveCallModal.tsx`.
 
 ### 📅 Ngày 6-7: Kiểm thử Chéo Đa trình duyệt & Unit Tests
-- [ ] **Sáng (Ngày 6):** Viết Unit Test trong `SignalingControllerTest.java` cho `SCREEN_SHARE_START`, `SCREEN_SHARE_STOP` và dọn dẹp trạng thái khi người chia sẻ rời phòng.
-- [ ] **Chiều (Ngày 6) & Ngày 7:** Kiểm thử E2E thực tế 2–3 tab trình duyệt: Chia sẻ cửa sổ IDE/Slide khi họp nhóm, kiểm tra tự động khôi phục Webcam khi bấm Stop Sharing, chạy `./mvnw test` và `npm run build` PASS 100%.
+- [x] **Sáng (Ngày 6):** Viết Unit Test trong `SignalingControllerTest.java` cho `SCREEN_SHARE_START`, `SCREEN_SHARE_STOP` và dọn dẹp trạng thái khi người chia sẻ rời phòng.
+- [x] **Chiều (Ngày 6) & Ngày 7:** Kiểm thử E2E thực tế 2–3 tab trình duyệt: Chia sẻ cửa sổ IDE/Slide khi họp nhóm, kiểm tra tự động khôi phục Webcam khi bấm Stop Sharing, chạy `./mvnw test` và `npm run build` PASS 100%.
 
 ---
 
@@ -174,10 +174,10 @@
 | [ ] | **W5-TV1-04** | **TV1** | Banner Ghim Đầu Khung Chat & Nhãn Tin nhắn Quan trọng | 6h | Rê chuột vào tin nhắn để ghim; gắn cờ `QUAN TRỌNG` nổi bật khi gửi. |
 | [ ] | **W5-TV1-05** | **TV1** | Drawer `"Tệp đã chia sẻ"` & `"Tin nhắn đã ghim"` + Preview Ảnh/PDF | 8h | Chuyển tab mượt mà, xem trước trực tiếp ảnh & file PDF ngay trong ứng dụng. |
 | [ ] | **W5-TV1-06** | **TV1** | Unit Tests cho Pin Message, Important & Media Library | 4h | `ChatServiceTest` xanh 100%, không lỗi build Frontend/Backend. |
-| [ ] | **W5-TV2-01** | **TV2** | Bổ sung `SCREEN_SHARE_START/STOP` vào Signaling Server | 5h | Truyền tải chính xác trạng thái chia sẻ màn hình 1-1 & phòng họp nhóm. |
-| [ ] | **W5-TV2-02** | **TV2** | Tích hợp `getDisplayMedia()` & `replaceTrack` trên WebRTC Client | 8h | Tráo track Camera <-> Màn hình mượt mà không rớt kết nối, xử lý Stop Sharing. |
-| [ ] | **W5-TV2-03** | **TV2** | Presentation Layout (Phóng to Màn hình Chia sẻ, Thu nhỏ Camera) | 8h | Tự động chuyển giao diện ưu tiên màn hình chia sẻ cho 1-1 & Mesh nhóm. |
-| [ ] | **W5-TV2-04** | **TV2** | Unit Tests Screen Share Signaling & Test E2E Đa trình duyệt | 5h | `SignalingControllerTest` pass 100%, chia sẻ màn hình sắc nét giữa 2-3 tab. |
+| [x] | **W5-TV2-01** | **TV2** | Bổ sung `SCREEN_SHARE_START/STOP` vào Signaling Server | 5h | Truyền tải chính xác trạng thái chia sẻ màn hình 1-1 & phòng họp nhóm. |
+| [x] | **W5-TV2-02** | **TV2** | Tích hợp `getDisplayMedia()` & `replaceTrack` trên WebRTC Client | 8h | Tráo track Camera <-> Màn hình mượt mà không rớt kết nối, xử lý Stop Sharing. |
+| [x] | **W5-TV2-03** | **TV2** | Presentation Layout (Phóng to Màn hình Chia sẻ, Thu nhỏ Camera) | 8h | Tự động chuyển giao diện ưu tiên màn hình chia sẻ cho 1-1 & Mesh nhóm. |
+| [x] | **W5-TV2-04** | **TV2** | Unit Tests Screen Share Signaling & Test E2E Đa trình duyệt | 5h | `SignalingControllerTest` pass 100%, chia sẻ màn hình sắc nét giữa 2-3 tab. |
 | [x] | **W5-TV3-01** | **TV3** | Đồng bộ nốt `@AI-Assistant` & Nhúng Whiteboard Split-screen vào Họp | 8h | Mở bảng vẽ ngay trong `ActiveCallModal` chia đôi màn hình Video + Canvas đồng bộ. |
 | [x] | **W5-TV3-02** | **TV3** | Tính năng Xuất Bảng vẽ ra File Ảnh PNG & Tài liệu PDF | 5h | Xuất file PNG và PDF sắc nét từ dữ liệu nét vẽ Canvas hiện tại. |
 | [x] | **W5-TV3-03** | **TV3** | Backend `ChatSummarizerService` & API Tóm tắt Hội thoại AI | 8h | Gom tin nhắn từ DB, gọi Gemini API trả về Summary + Key Topics + Action Items. |

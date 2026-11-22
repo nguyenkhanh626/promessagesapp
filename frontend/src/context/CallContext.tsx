@@ -18,10 +18,13 @@ interface CallContextType {
   duration: number
   isMuted: boolean
   isVideoEnabled: boolean
+  isScreenSharing: boolean
+  activeScreenSharerId: string | null
   isRemoteCameraOff: boolean
   isRemoteMuted: boolean
   hasCameraDevice: boolean
   localVideoStream: MediaStream | null
+  localScreenStream: MediaStream | null
   remoteStream: MediaStream | null
   iceConnectionState: RTCIceConnectionState
   isMinimized: boolean
@@ -34,6 +37,7 @@ interface CallContextType {
   endCall: () => void
   toggleMute: () => void
   toggleVideo: () => void
+  toggleScreenShare: () => Promise<void>
   switchCameraDevice: (deviceId: string) => Promise<MediaStreamTrack | null>
   switchMicrophoneDevice: (deviceId: string) => Promise<MediaStreamTrack | null>
   toggleMinimize: () => void
@@ -56,6 +60,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isRemoteCameraOff, setIsRemoteCameraOff] = useState<boolean>(false)
   const [isRemoteMuted, setIsRemoteMuted] = useState<boolean>(false)
+  const [activeScreenSharerId, setActiveScreenSharerId] = useState<string | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new')
 
@@ -67,8 +72,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const {
     localVideoStream,
+    localScreenStream,
     isMuted,
     isVideoEnabled,
+    isScreenSharing,
     hasCameraDevice,
     permissionError,
     getAudioStream,
@@ -77,6 +84,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toggleVideo: toggleLocalVideo,
     switchCameraDevice,
     switchMicrophoneDevice,
+    startScreenShare,
+    stopScreenShare,
     stopStream,
   } = useMediaStream()
 
@@ -129,6 +138,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsMinimized(false)
     setIsRemoteCameraOff(false)
     setIsRemoteMuted(false)
+    setActiveScreenSharerId(null)
     setRemoteStream(null)
     setIceConnectionState('new')
   }, [stopStream])
@@ -350,11 +360,48 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           break
         }
 
+        case 'SCREEN_SHARE_START': {
+          setActiveScreenSharerId(msg.senderId)
+          if (callModeRef.current === 'GROUP') {
+            setParticipants((prev) =>
+              prev.map((p) => ({
+                ...p,
+                isScreenSharing: p.userId === msg.senderId,
+              }))
+            )
+            // Nếu người khác trong nhóm bấm chia sẻ màn hình khi mình đang chia sẻ -> tự dừng phía mình
+            if (msg.senderId !== user?.id && isScreenSharing) {
+              const camTrack = stopScreenShare()
+              await meshWebrtcManager.replaceTrackForAllPeers('video', camTrack, false)
+            }
+          } else if (msg.senderId !== user?.id) {
+            setIsRemoteCameraOff(false)
+          }
+          break
+        }
+
+        case 'SCREEN_SHARE_STOP': {
+          setActiveScreenSharerId((prev) => (prev === msg.senderId ? null : prev))
+          if (callModeRef.current === 'GROUP') {
+            setParticipants((prev) =>
+              prev.map((p) =>
+                p.userId === msg.senderId ? { ...p, isScreenSharing: false } : p
+              )
+            )
+          }
+          break
+        }
+
         case 'JOIN_ROOM': {
           if (callModeRef.current !== 'GROUP') break
           const roomId = msg.roomId || currentRoomId || ''
           const existingList: Array<{ userId: string; displayName?: string; avatarUrl?: string }> =
             msg.payload?.participants || []
+          const existingSharer: string = msg.payload?.activeScreenSharerId || ''
+
+          if (existingSharer) {
+            setActiveScreenSharerId(existingSharer)
+          }
 
           const initialParticipants: GroupParticipant[] = existingList
             .filter((p) => p.userId !== user?.id && p.userId !== user?.email)
@@ -365,6 +412,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
               stream: null,
               isMuted: false,
               isCameraOff: false,
+              isScreenSharing: existingSharer === p.userId,
             }))
 
           setParticipants(initialParticipants)
@@ -421,6 +469,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!leftId) break
           meshWebrtcManager.removePeer(leftId)
           setParticipants((prev) => prev.filter((p) => p.userId !== leftId))
+          setActiveScreenSharerId((prev) => (prev === leftId ? null : prev))
           break
         }
 
@@ -476,7 +525,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribe()
     }
-  }, [callStatus, user, targetUser, caller, currentRoomId, currentCallType, initMeshPeerConnection, cleanupCallState])
+  }, [
+    callStatus,
+    user,
+    targetUser,
+    caller,
+    currentRoomId,
+    currentCallType,
+    isScreenSharing,
+    stopScreenShare,
+    initMeshPeerConnection,
+    cleanupCallState,
+  ])
 
   // Tham gia cuộc gọi nhóm (Mesh WebRTC 3-5 người)
   const joinGroupCall = async (
@@ -708,11 +768,98 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const handleStopScreenShare = useCallback(async () => {
+    const camTrack = stopScreenShare()
+    const myId = user?.id || 'me'
+    setActiveScreenSharerId((prev) => (prev === myId ? null : prev))
+
+    if (callModeRef.current === 'GROUP') {
+      await meshWebrtcManager.replaceTrackForAllPeers('video', camTrack, false)
+      if (currentRoomId) {
+        signalingService.sendRoomSignal({
+          type: 'SCREEN_SHARE_STOP',
+          senderId: myId,
+          roomId: currentRoomId,
+        })
+      }
+    } else {
+      await webrtcManager.replaceVideoTrack(camTrack)
+      const otherUser = targetUser || caller
+      if (otherUser && currentRoomId) {
+        signalingService.sendSignal({
+          type: 'SCREEN_SHARE_STOP',
+          senderId: myId,
+          receiverId: otherUser.id,
+          roomId: currentRoomId,
+        })
+      }
+    }
+  }, [stopScreenShare, user?.id, currentRoomId, targetUser, caller])
+
+  const toggleScreenShare = async () => {
+    if (callStatus !== 'CONNECTED') return
+
+    if (isScreenSharing) {
+      await handleStopScreenShare()
+      return
+    }
+
+    const screenTrack = await startScreenShare(() => {
+      // Callback khi người dùng bấm nút "Stop sharing" của trình duyệt
+      handleStopScreenShare()
+    })
+
+    if (!screenTrack) return
+
+    const myId = user?.id || 'me'
+    setActiveScreenSharerId(myId)
+
+    if (callModeRef.current === 'GROUP') {
+      await meshWebrtcManager.replaceTrackForAllPeers('video', screenTrack, true)
+      if (currentRoomId) {
+        signalingService.sendRoomSignal({
+          type: 'SCREEN_SHARE_START',
+          senderId: myId,
+          senderName: user?.displayName,
+          roomId: currentRoomId,
+        })
+      }
+    } else {
+      await webrtcManager.replaceVideoTrack(screenTrack)
+      const otherUser = targetUser || caller
+      if (otherUser && currentRoomId) {
+        signalingService.sendSignal({
+          type: 'SCREEN_SHARE_START',
+          senderId: myId,
+          senderName: user?.displayName,
+          receiverId: otherUser.id,
+          roomId: currentRoomId,
+        })
+        // Nếu cuộc gọi 1-1 ban đầu là Audio-only, đàm phán lại SDP để đẩy video track sang đối phương
+        if (currentCallType === 'AUDIO') {
+          try {
+            const offer = await webrtcManager.createOffer(true)
+            signalingService.sendSignal({
+              type: 'CALL_OFFER',
+              senderId: myId,
+              receiverId: otherUser.id,
+              roomId: currentRoomId,
+              callType: 'VIDEO',
+              payload: offer,
+            })
+          } catch (err) {
+            console.warn('⚠️ Lỗi renegotiate khi chia sẻ màn hình trong Audio call:', err)
+          }
+        }
+      }
+    }
+  }
+
   const handleSwitchCamera = async (deviceId: string): Promise<MediaStreamTrack | null> => {
     const track = await switchCameraDevice(deviceId)
-    if (track) {
+    if (track && !isScreenSharing) {
       if (callModeRef.current === 'GROUP') {
-        await meshWebrtcManager.replaceTrackForAllPeers('video', track)
+        await meshWebrtcManager.replaceTrackForAllPeers('video', track, false)
       } else {
         await webrtcManager.replaceVideoTrack(track)
       }
@@ -753,10 +900,13 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         duration,
         isMuted,
         isVideoEnabled,
+        isScreenSharing,
+        activeScreenSharerId,
         isRemoteCameraOff,
         isRemoteMuted,
         hasCameraDevice,
         localVideoStream,
+        localScreenStream,
         remoteStream,
         iceConnectionState,
         isMinimized,
@@ -769,6 +919,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         endCall,
         toggleMute,
         toggleVideo,
+        toggleScreenShare,
         switchCameraDevice: handleSwitchCamera,
         switchMicrophoneDevice: handleSwitchMicrophone,
         toggleMinimize,
