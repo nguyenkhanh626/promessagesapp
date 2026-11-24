@@ -2,6 +2,37 @@ import type { User } from './auth'
 
 export type UserPresenceStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'AWAY'
 
+export interface MessageReactionSummary {
+  emoji: string
+  count: number
+  userIds: string[]
+  userNames: string[]
+}
+
+export interface ReactionEvent {
+  conversationId: string
+  messageId: string
+  reactions: MessageReactionSummary[]
+}
+
+export interface ReplyPreview {
+  id: string
+  senderId: string
+  senderName: string
+  content: string
+  messageType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM'
+  fileName?: string
+}
+
+export interface PagedMessagesResponse {
+  content: Message[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  hasMore: boolean
+}
+
 export interface Message {
   id: string
   conversationId: string
@@ -18,6 +49,9 @@ export interface Message {
   pinnedByName?: string
   pinnedAt?: string
   important?: boolean
+  replyToId?: string
+  replyTo?: ReplyPreview
+  reactions?: MessageReactionSummary[]
   createdAt: string
 }
 
@@ -52,6 +86,7 @@ export interface SendMessagePayload {
   fileName?: string
   fileSize?: number
   important?: boolean
+  replyToId?: string
 }
 
 export interface CreateGroupPayload {

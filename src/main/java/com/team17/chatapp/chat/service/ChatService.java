@@ -7,7 +7,9 @@ import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PagedMessagesDto;
 import com.team17.chatapp.chat.dto.PinMessageEventDto;
+import com.team17.chatapp.chat.dto.ReactionEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
 import com.team17.chatapp.chat.entity.MessageType;
@@ -36,6 +38,8 @@ public interface ChatService {
 
     Page<MessageDto> getConversationMessages(UUID conversationId, UUID currentUserId, int page, int size);
 
+    PagedMessagesDto getPagedMessages(UUID conversationId, UUID currentUserId, int page, int size);
+
     List<MessageDto> getAllMessagesAsc(UUID conversationId, UUID currentUserId);
 
     List<MessageDto> searchMessagesInConversation(UUID conversationId, UUID currentUserId, String keyword);
@@ -45,6 +49,8 @@ public interface ChatService {
     PinMessageEventDto togglePinMessage(UUID conversationId, UUID messageId, UUID requesterId, boolean pin);
 
     List<MessageDto> getPinnedMessages(UUID conversationId, UUID currentUserId);
+
+    ReactionEventDto toggleMessageReaction(UUID conversationId, UUID messageId, UUID userId, String emoji);
 
     List<ConversationMediaDto> getConversationMedia(UUID conversationId, UUID currentUserId, MessageType filterType);
 

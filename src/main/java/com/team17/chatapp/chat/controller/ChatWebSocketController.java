@@ -50,6 +50,7 @@ public class ChatWebSocketController {
                 .fileName(payload.getFileName())
                 .fileSize(payload.getFileSize())
                 .important(payload.isImportant())
+                .replyToId(payload.getReplyToId())
                 .build();
 
         MessageDto messageDto = chatService.saveMessage(payload.getConversationId(), sender.getId(), request);

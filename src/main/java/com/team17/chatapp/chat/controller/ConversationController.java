@@ -11,8 +11,11 @@ import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.DirectConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PagedMessagesDto;
 import com.team17.chatapp.chat.dto.PinMessageEventDto;
 import com.team17.chatapp.chat.dto.PresenceEventDto;
+import com.team17.chatapp.chat.dto.ReactionEventDto;
+import com.team17.chatapp.chat.dto.ReactionRequest;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.dto.TypingEventPayload;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
@@ -151,6 +154,33 @@ public class ConversationController {
         User currentUser = getAuthenticatedUser(authentication);
         List<MessageDto> messages = chatService.getAllMessagesAsc(conversationId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success(messages));
+    }
+
+    @GetMapping("/conversations/{id}/messages/paged")
+    public ResponseEntity<ApiResponse<PagedMessagesDto>> getPagedConversationMessages(
+            @PathVariable("id") UUID conversationId,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "30") int size,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        PagedMessagesDto paged = chatService.getPagedMessages(conversationId, currentUser.getId(), page, size);
+        return ResponseEntity.ok(ApiResponse.success(paged));
+    }
+
+    @PostMapping("/conversations/{id}/messages/{messageId}/reactions")
+    public ResponseEntity<ApiResponse<ReactionEventDto>> toggleReaction(
+            @PathVariable("id") UUID conversationId,
+            @PathVariable("messageId") UUID messageId,
+            @Valid @RequestBody ReactionRequest request,
+            Authentication authentication
+    ) {
+        User currentUser = getAuthenticatedUser(authentication);
+        ReactionEventDto event = chatService.toggleMessageReaction(
+                conversationId, messageId, currentUser.getId(), request.getEmoji()
+        );
+        messagingTemplate.convertAndSend("/topic/chat/" + conversationId + "/reaction", event);
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật cảm xúc tin nhắn", event));
     }
 
     @PostMapping("/conversations/{id}/messages/{messageId}/pin")

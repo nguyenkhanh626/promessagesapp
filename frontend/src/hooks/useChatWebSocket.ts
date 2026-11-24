@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { Conversation, Message, PinMessageEvent, PresenceEvent, TypingEvent } from '../types/chat'
+import type {
+  Conversation,
+  Message,
+  PinMessageEvent,
+  PresenceEvent,
+  ReactionEvent,
+  TypingEvent,
+} from '../types/chat'
 
 export function useChatWebSocket(
   conversationId: string | null,
@@ -8,7 +15,8 @@ export function useChatWebSocket(
   onTypingEvent?: (event: TypingEvent) => void,
   onPresenceEvent?: (event: PresenceEvent) => void,
   onConversationUpdate?: (conversation: Conversation) => void,
-  onPinEvent?: (event: PinMessageEvent) => void
+  onPinEvent?: (event: PinMessageEvent) => void,
+  onReactionEvent?: (event: ReactionEvent) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null)
   const isConnectedRef = useRef<boolean>(false)
@@ -47,11 +55,9 @@ export function useChatWebSocket(
           if (isUnmounted) return
           const raw = event.data as string
 
-          // Khi nhận được CONNECTED từ Server -> Subscribe vào các kênh
           if (raw.startsWith('CONNECTED')) {
             isConnectedRef.current = true
 
-            // 1. Luôn subscribe kênh Presence toàn cục & cập nhật nhóm mới
             const subPresenceFrame = [
               'SUBSCRIBE',
               'id:sub-presence',
@@ -68,7 +74,6 @@ export function useChatWebSocket(
             ].join('\n') + '\0'
             socket?.send(subConversationsFrame)
 
-            // 2. Nếu có conversationId -> subscribe kênh chat, typing và pin
             if (conversationId) {
               const subChatFrame = [
                 'SUBSCRIBE',
@@ -93,11 +98,18 @@ export function useChatWebSocket(
                 '\n',
               ].join('\n') + '\0'
               socket?.send(subPinFrame)
+
+              const subReactionFrame = [
+                'SUBSCRIBE',
+                `id:sub-reaction-${conversationId}`,
+                `destination:/topic/chat/${conversationId}/reaction`,
+                '\n',
+              ].join('\n') + '\0'
+              socket?.send(subReactionFrame)
             }
             return
           }
 
-          // Khi nhận được bản tin MESSAGE từ STOMP
           if (raw.startsWith('MESSAGE')) {
             const doubleCrlf = raw.indexOf('\r\n\r\n')
             const doubleLf = raw.indexOf('\n\n')
@@ -117,6 +129,10 @@ export function useChatWebSocket(
                 } else if (headersPart.includes('/queue/conversations')) {
                   if (onConversationUpdate && parsed && parsed.id) {
                     onConversationUpdate(parsed as Conversation)
+                  }
+                } else if (headersPart.includes('/reaction')) {
+                  if (onReactionEvent && parsed && parsed.messageId) {
+                    onReactionEvent(parsed as ReactionEvent)
                   }
                 } else if (headersPart.includes('/pin')) {
                   if (onPinEvent && parsed && parsed.messageId) {
@@ -166,9 +182,11 @@ export function useChatWebSocket(
             const unsubChat = ['UNSUBSCRIBE', `id:sub-${conversationId}`, '\n'].join('\n') + '\0'
             const unsubTyping = ['UNSUBSCRIBE', `id:sub-typing-${conversationId}`, '\n'].join('\n') + '\0'
             const unsubPin = ['UNSUBSCRIBE', `id:sub-pin-${conversationId}`, '\n'].join('\n') + '\0'
+            const unsubReaction = ['UNSUBSCRIBE', `id:sub-reaction-${conversationId}`, '\n'].join('\n') + '\0'
             socket.send(unsubChat)
             socket.send(unsubTyping)
             socket.send(unsubPin)
+            socket.send(unsubReaction)
           }
           const unsubPresence = ['UNSUBSCRIBE', 'id:sub-presence', '\n'].join('\n') + '\0'
           const unsubConversations = ['UNSUBSCRIBE', 'id:sub-user-conversations', '\n'].join('\n') + '\0'
@@ -180,7 +198,16 @@ export function useChatWebSocket(
       wsRef.current = null
       isConnectedRef.current = false
     }
-  }, [conversationId, token, onNewMessage, onTypingEvent, onPresenceEvent, onConversationUpdate, onPinEvent])
+  }, [
+    conversationId,
+    token,
+    onNewMessage,
+    onTypingEvent,
+    onPresenceEvent,
+    onConversationUpdate,
+    onPinEvent,
+    onReactionEvent,
+  ])
 
   const sendTypingSignal = useCallback(
     (typing: boolean) => {

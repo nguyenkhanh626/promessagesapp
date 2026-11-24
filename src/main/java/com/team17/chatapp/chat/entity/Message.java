@@ -60,4 +60,7 @@ public class Message extends BaseEntity {
     @Column(name = "is_important", nullable = false, columnDefinition = "boolean default false")
     @Builder.Default
     private boolean important = false;
+
+    @Column(name = "reply_to_id")
+    private UUID replyToId;
 }

@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -25,6 +27,8 @@ public class SendMessageRequest {
 
     @Builder.Default
     private boolean important = false;
+
+    private UUID replyToId;
 
     public MessageType getMessageType() {
         return messageType != null ? messageType : MessageType.TEXT;

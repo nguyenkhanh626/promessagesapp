@@ -16,16 +16,22 @@ import type {
   Message,
   PinMessageEvent,
   PresenceEvent,
+  ReactionEvent,
   TypingEvent,
   UserPresenceStatus,
 } from '../types/chat'
 import type { User } from '../types/auth'
+
+const MESSAGE_PAGE_SIZE = 30
 
 export const ChatPage: React.FC = () => {
   const { user: currentUser, token } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [messagePage, setMessagePage] = useState(0)
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false)
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
   const [mediaItems, setMediaItems] = useState<ConversationMediaItem[]>([])
   const [isLoadingMedia, setIsLoadingMedia] = useState(false)
@@ -64,10 +70,13 @@ export const ChatPage: React.FC = () => {
   const activeConversationIdRef = useRef<string | null>(null)
   activeConversationIdRef.current = activeConversation?.id || null
 
-  // 2. Tải lịch sử tin nhắn, tin nhắn đã ghim, tệp đã chia sẻ & thành viên khi chọn hội thoại
+  // 2. Tải lịch sử tin nhắn (phân trang), tin nhắn đã ghim, tệp đã chia sẻ & thành viên
   useEffect(() => {
     setTypingUsers([])
     setMessages([])
+    setMessagePage(0)
+    setHasMoreMessages(false)
+    setIsLoadingMoreMessages(false)
     setPinnedMessages([])
     setMediaItems([])
     setGroupMembers([])
@@ -83,13 +92,15 @@ export const ChatPage: React.FC = () => {
       const convId = activeConversation!.id
       setIsLoadingMedia(true)
       try {
-        const [history, pinned, media] = await Promise.all([
-          chatService.getMessages(convId),
+        const [paged, pinned, media] = await Promise.all([
+          chatService.getMessagesPaged(convId, 0, MESSAGE_PAGE_SIZE),
           chatService.getPinnedMessages(convId).catch(() => []),
           chatService.getConversationMedia(convId, 'ALL').catch(() => []),
         ])
         if (isMounted) {
-          setMessages(history)
+          setMessages(paged.content)
+          setMessagePage(paged.page)
+          setHasMoreMessages(paged.hasMore)
           setPinnedMessages(pinned)
           setMediaItems(media)
         }
@@ -118,6 +129,31 @@ export const ChatPage: React.FC = () => {
     }
   }, [activeConversation?.id, activeConversation?.type])
 
+  // Tải thêm tin nhắn cũ hơn (Pagination)
+  const handleLoadOlderMessages = async () => {
+    if (!activeConversation || !hasMoreMessages || isLoadingMoreMessages) return
+    const nextPage = messagePage + 1
+    setIsLoadingMoreMessages(true)
+    try {
+      const paged = await chatService.getMessagesPaged(
+        activeConversation.id,
+        nextPage,
+        MESSAGE_PAGE_SIZE
+      )
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id))
+        const olderUnique = paged.content.filter((m) => !existingIds.has(m.id))
+        return [...olderUnique, ...prev]
+      })
+      setMessagePage(paged.page)
+      setHasMoreMessages(paged.hasMore)
+    } catch (err) {
+      console.error('Không thể tải thêm tin nhắn cũ:', err)
+    } finally {
+      setIsLoadingMoreMessages(false)
+    }
+  }
+
   // 3. Xử lý nhận tin nhắn mới từ WebSocket STOMP thời gian thực
   const handleIncomingMessage = useCallback((newMsg: Message) => {
     if (newMsg.conversationId === activeConversationIdRef.current) {
@@ -145,7 +181,6 @@ export const ChatPage: React.FC = () => {
         })
       }
 
-      // Khi nhận được tin nhắn mới từ người đang gõ, xóa trạng thái typing của người đó
       setTypingUsers((prev) => prev.filter((t) => t.userId !== newMsg.senderId))
     }
 
@@ -269,7 +304,15 @@ export const ChatPage: React.FC = () => {
     })
   }, [])
 
-  // Lắng nghe WebSocket (Chat + Typing + Presence + Nhóm mới + Pin)
+  // 8. Xử lý sự kiện Thả cảm xúc Emoji Reaction thời gian thực
+  const handleReactionEvent = useCallback((event: ReactionEvent) => {
+    if (!event || event.conversationId !== activeConversationIdRef.current) return
+    setMessages((prev) =>
+      prev.map((m) => (m.id === event.messageId ? { ...m, reactions: event.reactions } : m))
+    )
+  }, [])
+
+  // Lắng nghe WebSocket (Chat + Typing + Presence + Nhóm mới + Pin + Reaction)
   const { sendTypingSignal } = useChatWebSocket(
     activeConversation ? activeConversation.id : null,
     token,
@@ -277,7 +320,8 @@ export const ChatPage: React.FC = () => {
     handleTypingEvent,
     handlePresenceEvent,
     handleConversationUpdate,
-    handlePinEvent
+    handlePinEvent,
+    handleReactionEvent
   )
 
   const handleTypingChange = useCallback(
@@ -299,11 +343,12 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // Gửi tin nhắn mới (hỗ trợ đính kèm hình ảnh / file & gắn cờ Quan trọng)
+  // Gửi tin nhắn mới (hỗ trợ đính kèm hình ảnh / file, gắn cờ Quan trọng & trả lời trích dẫn Reply)
   const handleSendMessage = async (
     content: string,
     attachmentFile?: File | null,
-    important: boolean = false
+    important: boolean = false,
+    replyToId?: string
   ) => {
     if (!activeConversation) return
     setIsSending(true)
@@ -317,6 +362,7 @@ export const ChatPage: React.FC = () => {
           fileName: uploaded.originalFileName,
           fileSize: uploaded.fileSize,
           important,
+          replyToId,
         })
         handleIncomingMessage(sentMsg)
       } else if (content) {
@@ -324,6 +370,7 @@ export const ChatPage: React.FC = () => {
           content,
           messageType: 'TEXT',
           important,
+          replyToId,
         })
         handleIncomingMessage(sentMsg)
       }
@@ -331,6 +378,17 @@ export const ChatPage: React.FC = () => {
       console.error('Lỗi gửi tin nhắn:', err)
     } finally {
       setIsSending(false)
+    }
+  }
+
+  // Thả / Gỡ cảm xúc Emoji
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    if (!activeConversation) return
+    try {
+      const event = await chatService.toggleReaction(activeConversation.id, messageId, emoji)
+      handleReactionEvent(event)
+    } catch (err) {
+      console.error('Không thể cập nhật cảm xúc tin nhắn:', err)
     }
   }
 
@@ -357,7 +415,6 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // Mở/đóng Drawer bên phải (Tin nhắn đã ghim / Tệp đã chia sẻ)
   const handleOpenAssetsDrawer = (tab: 'PINNED' | 'MEDIA') => {
     setShowMembersPanel(false)
     setAssetsDrawerTab((prev) => (prev === tab ? null : tab))
@@ -368,7 +425,6 @@ export const ChatPage: React.FC = () => {
     setShowMembersPanel((prev) => !prev)
   }
 
-  // Tìm kiếm người dùng
   const handleSearchUsers = async (query: string) => {
     setIsSearching(true)
     try {
@@ -381,7 +437,6 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // Bắt đầu chat 1-1 với một người dùng
   const handleStartDirectChat = async (targetUser: User) => {
     try {
       const conversation = await chatService.getOrCreateDirectConversation(targetUser.id)
@@ -398,7 +453,6 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // Tạo nhóm chat mới
   const handleCreateGroup = async (name: string, memberIds: string[]) => {
     const newGroup = await chatService.createGroupConversation({ name, memberIds })
     setConversations((prev) => [newGroup, ...prev])
@@ -408,7 +462,6 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  // Thêm thành viên mới vào nhóm
   const handleAddMembers = async (userIds: string[]) => {
     if (!activeConversation) return
     try {
@@ -420,14 +473,15 @@ export const ChatPage: React.FC = () => {
       setConversations((prev) =>
         prev.map((c) => (c.id === updatedConv.id ? updatedConv : c))
       )
-      const history = await chatService.getMessages(activeConversation.id)
-      setMessages(history)
+      const paged = await chatService.getMessagesPaged(activeConversation.id, 0, MESSAGE_PAGE_SIZE)
+      setMessages(paged.content)
+      setMessagePage(paged.page)
+      setHasMoreMessages(paged.hasMore)
     } catch (err) {
       console.error('Lỗi thêm thành viên vào nhóm:', err)
     }
   }
 
-  // Xóa thành viên hoặc rời nhóm
   const handleRemoveMember = async (targetUserId: string) => {
     if (!activeConversation) return
     try {
@@ -449,8 +503,10 @@ export const ChatPage: React.FC = () => {
             c.id === activeConversation.id ? { ...c, memberCount: updatedMembers.length } : c
           )
         )
-        const history = await chatService.getMessages(activeConversation.id)
-        setMessages(history)
+        const paged = await chatService.getMessagesPaged(activeConversation.id, 0, MESSAGE_PAGE_SIZE)
+        setMessages(paged.content)
+        setMessagePage(paged.page)
+        setHasMoreMessages(paged.hasMore)
       }
     } catch (err) {
       console.error('Lỗi xóa/rời nhóm:', err)
@@ -477,9 +533,13 @@ export const ChatPage: React.FC = () => {
         conversation={activeConversation}
         messages={messages}
         pinnedMessages={pinnedMessages}
+        hasMoreMessages={hasMoreMessages}
+        isLoadingMoreMessages={isLoadingMoreMessages}
+        onLoadOlderMessages={handleLoadOlderMessages}
         currentUser={currentUser}
         onSendMessage={handleSendMessage}
         onTogglePinMessage={handleTogglePinMessage}
+        onToggleReaction={handleToggleReaction}
         onTypingChange={handleTypingChange}
         typingUsers={typingUsers}
         isSending={isSending}

@@ -7,8 +7,10 @@ import type {
   CreateGroupPayload,
   FileUploadResponse,
   Message,
+  PagedMessagesResponse,
   PinMessageEvent,
   PresenceEvent,
+  ReactionEvent,
   SendMessagePayload,
   UserPresenceStatus,
 } from '../types/chat'
@@ -68,6 +70,29 @@ export const chatService = {
 
   async getMessages(conversationId: string): Promise<Message[]> {
     const response = await apiClient.get<ApiResponse<Message[]>>(`/conversations/${conversationId}/messages`)
+    return response.data.data
+  },
+
+  async getMessagesPaged(
+    conversationId: string,
+    page: number = 0,
+    size: number = 30
+  ): Promise<PagedMessagesResponse> {
+    const response = await apiClient.get<ApiResponse<PagedMessagesResponse>>(
+      `/conversations/${conversationId}/messages/paged?page=${page}&size=${size}`
+    )
+    return response.data.data
+  },
+
+  async toggleReaction(
+    conversationId: string,
+    messageId: string,
+    emoji: string
+  ): Promise<ReactionEvent> {
+    const response = await apiClient.post<ApiResponse<ReactionEvent>>(
+      `/conversations/${conversationId}/messages/${messageId}/reactions`,
+      { emoji }
+    )
     return response.data.data
   },
 

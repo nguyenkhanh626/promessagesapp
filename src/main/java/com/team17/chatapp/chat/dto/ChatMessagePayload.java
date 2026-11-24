@@ -31,4 +31,6 @@ public class ChatMessagePayload {
 
     @Builder.Default
     private boolean important = false;
+
+    private UUID replyToId;
 }

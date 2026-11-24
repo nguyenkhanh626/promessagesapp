@@ -9,16 +9,20 @@ import com.team17.chatapp.chat.dto.ConversationDto;
 import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.PagedMessagesDto;
 import com.team17.chatapp.chat.dto.PinMessageEventDto;
+import com.team17.chatapp.chat.dto.ReactionEventDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.entity.Conversation;
 import com.team17.chatapp.chat.entity.ConversationMember;
 import com.team17.chatapp.chat.entity.ConversationType;
 import com.team17.chatapp.chat.entity.MemberRole;
 import com.team17.chatapp.chat.entity.Message;
+import com.team17.chatapp.chat.entity.MessageReaction;
 import com.team17.chatapp.chat.entity.MessageType;
 import com.team17.chatapp.chat.repository.ConversationMemberRepository;
 import com.team17.chatapp.chat.repository.ConversationRepository;
+import com.team17.chatapp.chat.repository.MessageReactionRepository;
 import com.team17.chatapp.chat.repository.MessageRepository;
 import com.team17.chatapp.chat.service.ChatServiceImpl;
 import com.team17.chatapp.exception.AppException;
@@ -29,6 +33,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
@@ -54,6 +60,9 @@ class ChatServiceTest {
 
     @Mock
     private MessageRepository messageRepository;
+
+    @Mock
+    private MessageReactionRepository messageReactionRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -440,5 +449,139 @@ class ChatServiceTest {
         assertNotNull(dto);
         assertEquals(true, dto.isImportant());
         assertEquals("❗ Họp khẩn lúc 15h!", sampleConversation.getLastMessageContent());
+    }
+
+    @Test
+    @DisplayName("Tuần 6: Thả cảm xúc Emoji Reaction và gỡ khi bấm lại lần 2")
+    void testToggleMessageReaction_AddAndRemove_Success() {
+        UUID conversationId = sampleConversation.getId();
+        UUID messageId = UUID.randomUUID();
+        Message msg = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user2Id)
+                .content("Tin nhắn tuyệt vời!")
+                .messageType(MessageType.TEXT)
+                .build();
+        msg.setId(messageId);
+
+        MessageReaction savedReaction = MessageReaction.builder()
+                .messageId(messageId)
+                .userId(user1Id)
+                .emoji("👍")
+                .build();
+        savedReaction.setId(UUID.randomUUID());
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(msg));
+        when(messageReactionRepository.findByMessageIdAndUserIdAndEmoji(messageId, user1Id, "👍"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(savedReaction));
+        when(messageReactionRepository.findByMessageId(messageId))
+                .thenReturn(List.of(savedReaction))
+                .thenReturn(List.of());
+        when(userRepository.findAllById(any())).thenReturn(List.of(user1));
+
+        // Lần 1: Thả cảm xúc 👍
+        ReactionEventDto added = chatService.toggleMessageReaction(conversationId, messageId, user1Id, "👍");
+        assertNotNull(added);
+        assertEquals(1, added.getReactions().size());
+        assertEquals("👍", added.getReactions().get(0).getEmoji());
+        assertEquals(1, added.getReactions().get(0).getCount());
+        verify(messageReactionRepository).save(any(MessageReaction.class));
+
+        // Lần 2: Gỡ cảm xúc 👍
+        ReactionEventDto removed = chatService.toggleMessageReaction(conversationId, messageId, user1Id, "👍");
+        assertNotNull(removed);
+        assertEquals(0, removed.getReactions().size());
+        verify(messageReactionRepository).delete(savedReaction);
+    }
+
+    @Test
+    @DisplayName("Tuần 6: Gửi tin nhắn trả lời trích dẫn (Reply/Quote) và chặn trích dẫn khác phòng")
+    void testSaveMessage_WithReplyTo_SuccessAndRejectCrossConversation() {
+        UUID conversationId = sampleConversation.getId();
+        UUID parentId = UUID.randomUUID();
+        Message parentMsg = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user2Id)
+                .content("Hẹn 9h sáng mai họp nhé")
+                .messageType(MessageType.TEXT)
+                .build();
+        parentMsg.setId(parentId);
+
+        SendMessageRequest validReplyReq = SendMessageRequest.builder()
+                .content("Ok mình xác nhận!")
+                .messageType(MessageType.TEXT)
+                .replyToId(parentId)
+                .build();
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(sampleConversation));
+        when(messageRepository.findById(parentId)).thenReturn(Optional.of(parentMsg));
+        when(messageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(user1Id)).thenReturn(Optional.of(user1));
+        when(userRepository.findById(user2Id)).thenReturn(Optional.of(user2));
+
+        MessageDto replyDto = chatService.saveMessage(conversationId, user1Id, validReplyReq);
+        assertNotNull(replyDto.getReplyTo());
+        assertEquals(parentId, replyDto.getReplyToId());
+        assertEquals("Tran Thi B", replyDto.getReplyTo().getSenderName());
+        assertEquals("Hẹn 9h sáng mai họp nhé", replyDto.getReplyTo().getContent());
+
+        // Chặn trích dẫn tin nhắn từ phòng khác
+        UUID foreignParentId = UUID.randomUUID();
+        Message foreignMsg = Message.builder()
+                .conversationId(UUID.randomUUID())
+                .senderId(user3Id)
+                .content("Tin phòng khác")
+                .messageType(MessageType.TEXT)
+                .build();
+        foreignMsg.setId(foreignParentId);
+        when(messageRepository.findById(foreignParentId)).thenReturn(Optional.of(foreignMsg));
+
+        SendMessageRequest invalidReplyReq = SendMessageRequest.builder()
+                .content("Trích dẫn sai phòng")
+                .replyToId(foreignParentId)
+                .build();
+        AppException ex = assertThrows(AppException.class, () ->
+                chatService.saveMessage(conversationId, user1Id, invalidReplyReq)
+        );
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+    }
+
+    @Test
+    @DisplayName("Tuần 6: Phân trang lịch sử tin nhắn đảo đúng thứ tự thời gian và cờ hasMore")
+    void testGetPagedMessages_Success() {
+        UUID conversationId = sampleConversation.getId();
+        Message newest = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user1Id)
+                .content("Tin mới nhất")
+                .messageType(MessageType.TEXT)
+                .build();
+        newest.setId(UUID.randomUUID());
+
+        Message older = Message.builder()
+                .conversationId(conversationId)
+                .senderId(user2Id)
+                .content("Tin cũ hơn")
+                .messageType(MessageType.TEXT)
+                .build();
+        older.setId(UUID.randomUUID());
+
+        when(conversationMemberRepository.existsByConversationIdAndUserId(conversationId, user1Id)).thenReturn(true);
+        when(messageRepository.findByConversationIdOrderByCreatedAtDesc(conversationId, PageRequest.of(0, 2)))
+                .thenReturn(new PageImpl<>(List.of(newest, older), PageRequest.of(0, 2), 5));
+        when(messageReactionRepository.findByMessageIdIn(any())).thenReturn(List.of());
+        when(userRepository.findAllById(any())).thenReturn(List.of(user1, user2));
+
+        PagedMessagesDto paged = chatService.getPagedMessages(conversationId, user1Id, 0, 2);
+
+        assertNotNull(paged);
+        assertEquals(2, paged.getContent().size());
+        assertEquals("Tin cũ hơn", paged.getContent().get(0).getContent());
+        assertEquals("Tin mới nhất", paged.getContent().get(1).getContent());
+        assertEquals(true, paged.isHasMore());
+        assertEquals(5, paged.getTotalElements());
     }
 }

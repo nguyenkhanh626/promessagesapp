@@ -9,8 +9,8 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 6
 
-- [ ] **Tiến độ chung toàn đội:** `0%`
-- [ ] **Mục tiêu 1 (TV1):** Tính năng Thả cảm xúc (`MessageReaction`), Trả lời trích dẫn tin nhắn cũ (`replyToId` / Quote), Phân trang tải tin nhắn cũ (Infinite Scroll / Load More) và đồng bộ realtime qua WebSocket STOMP.
+- [ ] **Tiến độ chung toàn đội:** `35%` (Phân hệ Emoji Reaction, Reply/Quote & Phân trang tin nhắn của TV1 đã hoàn thành 100%)
+- [x] **Mục tiêu 1 (TV1):** Tính năng Thả cảm xúc (`MessageReaction`), Trả lời trích dẫn tin nhắn cũ (`replyToId` / Quote), Phân trang tải tin nhắn cũ (Infinite Scroll / Load More) và đồng bộ realtime qua WebSocket STOMP. - **ĐÃ HOÀN THÀNH 100%**
 - [ ] **Mục tiêu 2 (TV2):** Cấu hình Coturn Server (STUN/TURN vượt NAT), cơ chế tự động phục hồi kết nối khi rớt mạng (ICE Restart / Auto-reconnect), tự động điều chỉnh bitrate video khi mạng yếu và nâng cấp thống kê `CallLogs`.
 - [ ] **Mục tiêu 3 (TV3):** Xây dựng API & UI AI Smart Replies (3 gợi ý trả lời nhanh dạng pill phía trên ô nhập tin nhắn), Modal Biên bản cuộc họp tự động (Meeting Minutes) và Rate Limiting bảo vệ API Key Gemini.
 
@@ -21,65 +21,65 @@
 > **Trọng tâm:** Hoàn thiện trải nghiệm nhắn tin tương tác chuyên sâu chuẩn Microsoft Teams gồm: Thả cảm xúc Emoji (`👍 ❤️ 😂 😮 😢 🙏`), Trả lời trích dẫn tin nhắn cũ kèm cuộn tới tin nhắn gốc, và phân trang tải lịch sử tin nhắn mượt mà.
 
 ### 📅 Ngày 1: Thiết kế Entity `MessageReaction` & Mở rộng `Message` cho Reply/Quote
-- [ ] **Sáng:** Họp Sprint Planning Tuần 6, thống nhất kênh WebSocket `/topic/chat/{conversationId}/reaction` và cấu trúc trích dẫn tin nhắn (`replyToMessage`).
-- [ ] **Chiều:** Tạo Entity mới `MessageReaction.java` (`src/main/java/com/team17/chatapp/chat/entity/`):
-  - [ ] Trường: `messageId` (`UUID`), `userId` (`UUID`), `emoji` (`String`, độ dài tối đa 16 ký tự).
-  - [ ] Ràng buộc duy nhất (`@UniqueConstraint(columnNames = {"message_id", "user_id", "emoji"})`) tránh trùng lặp cùng một emoji của cùng một người dùng.
-- [ ] **Chiều:** Mở rộng `Message.java` bổ sung cột `reply_to_id` (`UUID replyToId`, nullable) để liên kết tới tin nhắn được trích dẫn.
+- [x] **Sáng:** Họp Sprint Planning Tuần 6, thống nhất kênh WebSocket `/topic/chat/{conversationId}/reaction` và cấu trúc trích dẫn tin nhắn (`replyToMessage`).
+- [x] **Chiều:** Tạo Entity mới `MessageReaction.java` (`src/main/java/com/team17/chatapp/chat/entity/`):
+  - [x] Trường: `messageId` (`UUID`), `userId` (`UUID`), `emoji` (`String`, độ dài tối đa 16 ký tự).
+  - [x] Ràng buộc duy nhất (`@UniqueConstraint(columnNames = {"message_id", "user_id", "emoji"})`) tránh trùng lặp cùng một emoji của cùng một người dùng.
+- [x] **Chiều:** Mở rộng `Message.java` bổ sung cột `reply_to_id` (`UUID replyToId`, nullable) để liên kết tới tin nhắn được trích dẫn.
 
 ### 📅 Ngày 2: Xây dựng `MessageReactionRepository` & DTOs Phản ứng / Trích dẫn
-- [ ] **Sáng:** Tạo `MessageReactionRepository.java`:
-  - [ ] `findByMessageIdIn(Collection<UUID> messageIds)`: Gom toàn bộ reaction cho danh sách tin nhắn trong 1 truy vấn (tránh lỗi N+1 query).
-  - [ ] `findByMessageIdAndUserIdAndEmoji(UUID messageId, UUID userId, String emoji)`: Hỗ trợ bật/tắt (toggle) reaction.
-  - [ ] `findByMessageId(UUID messageId)`.
-- [ ] **Chiều:** Tạo và cập nhật các DTOs:
-  - [ ] `ReactionRequest.java` (`@NotBlank String emoji`).
-  - [ ] `MessageReactionDto.java` (`emoji`, `count`, `userIds`, `userNames`, `reactedByMe`).
-  - [ ] `ReactionEventDto.java` (`conversationId`, `messageId`, `reactions`: danh sách reaction đã gom nhóm mới nhất).
-  - [ ] `ReplyPreviewDto.java` (`id`, `senderId`, `senderName`, `content`, `messageType`, `fileName`).
-  - [ ] Cập nhật `MessageDto.java`, `SendMessageRequest.java`, `ChatMessagePayload.java` bổ sung `replyToId`, `replyTo` (`ReplyPreviewDto`), `reactions` (`List<MessageReactionDto>`).
+- [x] **Sáng:** Tạo `MessageReactionRepository.java`:
+  - [x] `findByMessageIdIn(Collection<UUID> messageIds)`: Gom toàn bộ reaction cho danh sách tin nhắn trong 1 truy vấn (tránh lỗi N+1 query).
+  - [x] `findByMessageIdAndUserIdAndEmoji(UUID messageId, UUID userId, String emoji)`: Hỗ trợ bật/tắt (toggle) reaction.
+  - [x] `findByMessageId(UUID messageId)`.
+- [x] **Chiều:** Tạo và cập nhật các DTOs:
+  - [x] `ReactionRequest.java` (`@NotBlank String emoji`).
+  - [x] `MessageReactionDto.java` (`emoji`, `count`, `userIds`, `userNames`).
+  - [x] `ReactionEventDto.java` (`conversationId`, `messageId`, `reactions`: danh sách reaction đã gom nhóm mới nhất).
+  - [x] `ReplyPreviewDto.java` (`id`, `senderId`, `senderName`, `content`, `messageType`, `fileName`).
+  - [x] Cập nhật `MessageDto.java`, `SendMessageRequest.java`, `ChatMessagePayload.java` bổ sung `replyToId`, `replyTo` (`ReplyPreviewDto`), `reactions` (`List<MessageReactionDto>`).
 
 ### 📅 Ngày 3: Nghiệp vụ Backend & REST APIs (Reaction, Reply & Message Pagination)
-- [ ] **Sáng:** Nâng cấp `ChatService.java` và `ChatServiceImpl.java`:
-  - [ ] `toggleMessageReaction(UUID conversationId, UUID messageId, UUID userId, String emoji)`: Kiểm tra quyền thành viên; nếu đã thả emoji đó thì xóa (unreact), ngược lại thêm mới; trả về `ReactionEventDto` kèm danh sách reaction đã gom nhóm.
-  - [ ] Cập nhật `saveMessage()`: Kiểm tra hợp lệ `replyToId` (phải thuộc cùng `conversationId`), lưu liên kết và đính kèm `ReplyPreviewDto` trong `MessageDto` trả về.
-  - [ ] Nâng cấp `mapMessagesToDtos()`: Nạp hàng loạt `reactions` và `replyTo` theo batch (`findAllById`, `findByMessageIdIn`) tối ưu hiệu năng.
-  - [ ] Chuẩn hóa `getConversationMessages(conversationId, currentUserId, page, size)` trả về kết quả phân trang (`Page<MessageDto>`).
-- [ ] **Chiều:** Mở các REST API mới trong `ConversationController.java`:
-  - [ ] `POST /api/conversations/{id}/messages/{messageId}/reactions`: Toggle thả cảm xúc và broadcast tới `/topic/chat/{id}/reaction`.
-  - [ ] `GET /api/conversations/{id}/messages/paged?page=0&size=30`: API phân trang tải thêm lịch sử tin nhắn cũ (`hasMore`, `totalElements`, `content`).
+- [x] **Sáng:** Nâng cấp `ChatService.java` và `ChatServiceImpl.java`:
+  - [x] `toggleMessageReaction(UUID conversationId, UUID messageId, UUID userId, String emoji)`: Kiểm tra quyền thành viên; nếu đã thả emoji đó thì xóa (unreact), ngược lại thêm mới; trả về `ReactionEventDto` kèm danh sách reaction đã gom nhóm.
+  - [x] Cập nhật `saveMessage()`: Kiểm tra hợp lệ `replyToId` (phải thuộc cùng `conversationId`), lưu liên kết và đính kèm `ReplyPreviewDto` trong `MessageDto` trả về.
+  - [x] Nâng cấp `mapMessagesToDtos()`: Nạp hàng loạt `reactions` và `replyTo` theo batch (`findAllById`, `findByMessageIdIn`) tối ưu hiệu năng.
+  - [x] Chuẩn hóa `getPagedMessages(conversationId, currentUserId, page, size)` trả về kết quả phân trang (`PagedMessagesDto`).
+- [x] **Chiều:** Mở các REST API mới trong `ConversationController.java`:
+  - [x] `POST /api/conversations/{id}/messages/{messageId}/reactions`: Toggle thả cảm xúc và broadcast tới `/topic/chat/{id}/reaction`.
+  - [x] `GET /api/conversations/{id}/messages/paged?page=0&size=30`: API phân trang tải thêm lịch sử tin nhắn cũ (`hasMore`, `totalElements`, `content`).
 
 ### 📅 Ngày 4: Cập nhật Frontend Types, Service & WebSocket Reaction Sync
-- [ ] **Sáng:** Cập nhật `frontend/src/types/chat.ts`:
-  - [ ] Định nghĩa `MessageReactionSummary`, `ReactionEvent`, `ReplyPreview`, `PagedMessagesResponse`.
-  - [ ] Mở rộng `Message` và `SendMessagePayload` với `replyToId`, `replyTo`, `reactions`.
-- [ ] **Sáng:** Cập nhật `frontend/src/services/chatService.ts`:
-  - [ ] Thêm `toggleReaction(conversationId, messageId, emoji)` và `getMessagesPaged(conversationId, page, size)`.
-- [ ] **Chiều:** Nâng cấp `frontend/src/hooks/useChatWebSocket.ts` và `ChatPage.tsx`:
-  - [ ] Subscribe thêm kênh `/topic/chat/{conversationId}/reaction` để cập nhật tức thì số lượng Emoji trên màn hình mọi thành viên.
+- [x] **Sáng:** Cập nhật `frontend/src/types/chat.ts`:
+  - [x] Định nghĩa `MessageReactionSummary`, `ReactionEvent`, `ReplyPreview`, `PagedMessagesResponse`.
+  - [x] Mở rộng `Message` và `SendMessagePayload` với `replyToId`, `replyTo`, `reactions`.
+- [x] **Sáng:** Cập nhật `frontend/src/services/chatService.ts`:
+  - [x] Thêm `toggleReaction(conversationId, messageId, emoji)` và `getMessagesPaged(conversationId, page, size)`.
+- [x] **Chiều:** Nâng cấp `frontend/src/hooks/useChatWebSocket.ts` và `ChatPage.tsx`:
+  - [x] Subscribe thêm kênh `/topic/chat/{conversationId}/reaction` để cập nhật tức thì số lượng Emoji trên màn hình mọi thành viên.
 
 ### 📅 Ngày 5: Giao diện Emoji Reaction Picker & Nhãn Cảm xúc dưới Bong bóng Chat
-- [ ] **Sáng:** Xây dựng thanh chọn Emoji nhanh (`QuickReactionBar`) xuất hiện khi rê chuột vào mỗi tin nhắn (cạnh nút Ghim):
-  - [ ] Bộ 6 biểu cảm nhanh chuẩn Teams: `👍`, `❤️`, `😂`, `😮`, `😢`, `🙏`.
-  - [ ] Hỗ trợ bấm chọn để bật/tắt cảm xúc ngay lập tức.
-- [ ] **Chiều:** Hiển thị các huy hiệu Emoji Reaction pills bên dưới bong bóng tin nhắn:
-  - [ ] Hiển thị `[Emoji] [Số lượng]` (nổi bật viền tím `#5B5FC7` nếu chính mình đã thả).
-  - [ ] Rê chuột vào pill hiển thị tooltip danh sách tên những người đã thả cảm xúc đó.
+- [x] **Sáng:** Xây dựng thanh chọn Emoji nhanh (`QuickReactionBar`) xuất hiện khi rê chuột vào mỗi tin nhắn (cạnh nút Trả lời & Ghim):
+  - [x] Bộ 6 biểu cảm nhanh chuẩn Teams: `👍`, `❤️`, `😂`, `😮`, `😢`, `🙏`.
+  - [x] Hỗ trợ bấm chọn để bật/tắt cảm xúc ngay lập tức.
+- [x] **Chiều:** Hiển thị các huy hiệu Emoji Reaction pills bên dưới bong bóng tin nhắn:
+  - [x] Hiển thị `[Emoji] [Số lượng]` (nổi bật viền tím `#5B5FC7` nếu chính mình đã thả).
+  - [x] Rê chuột vào pill hiển thị tooltip danh sách tên những người đã thả cảm xúc đó.
 
 ### 📅 Ngày 6: Giao diện Trả lời Trích dẫn (Reply/Quote) & Tải thêm Tin nhắn Cũ (Pagination)
-- [ ] **Sáng:** Tích hợp chức năng Trả lời trích dẫn (Reply/Quote) trong `ChatWindow.tsx`:
-  - [ ] Nút **Trả lời (`Reply`)** trên thanh hover mỗi tin nhắn.
-  - [ ] Thanh **Reply Preview Banner** phía trên ô nhập tin nhắn hiển thị *"Đang trả lời [Tên]: [Nội dung trích dẫn]"* kèm nút `X` hủy trả lời.
-  - [ ] Trong bong bóng tin nhắn có trích dẫn: Hiển thị khối Quote nhỏ có thanh dọc tím bên trái; khi bấm vào khối Quote sẽ **tự động cuộn mượt và highlight tin nhắn gốc**.
-- [ ] **Chiều:** Nâng cấp tải lịch sử tin nhắn phân trang:
-  - [ ] Nút **"Tải tin nhắn cũ hơn"** (hoặc tự động load khi cuộn lên đầu danh sách) giữ nguyên vị trí cuộn không bị giật màn hình.
+- [x] **Sáng:** Tích hợp chức năng Trả lời trích dẫn (Reply/Quote) trong `ChatWindow.tsx`:
+  - [x] Nút **Trả lời (`Reply`)** trên thanh hover mỗi tin nhắn.
+  - [x] Thanh **Reply Preview Banner** phía trên ô nhập tin nhắn hiển thị *"Đang trả lời [Tên]: [Nội dung trích dẫn]"* kèm nút `X` hủy trả lời.
+  - [x] Trong bong bóng tin nhắn có trích dẫn: Hiển thị khối Quote nhỏ có thanh dọc tím bên trái; khi bấm vào khối Quote sẽ **tự động cuộn mượt và highlight tin nhắn gốc**.
+- [x] **Chiều:** Nâng cấp tải lịch sử tin nhắn phân trang:
+  - [x] Nút **"Tải tin nhắn cũ hơn"** (bảo toàn vị trí cuộn không bị giật màn hình).
 
 ### 📅 Ngày 7: Unit Tests, Tinh chỉnh & Nghiệm thu Sprint 6
-- [ ] **Sáng:** Bổ sung Unit Test trong `ChatServiceTest.java`:
-  - [ ] Test thả cảm xúc (`toggleMessageReaction`) thêm mới & gỡ bỏ khi bấm lần 2.
-  - [ ] Test gửi tin nhắn có `replyToId` hợp lệ và báo lỗi `400` khi trích dẫn tin nhắn của cuộc hội thoại khác.
-  - [ ] Test phân trang lịch sử tin nhắn (`getConversationMessages`).
-- [ ] **Chiều:** Chạy `./mvnw test` đạt 100% PASS và `npm run build` sạch sẽ không lỗi TypeScript.
+- [x] **Sáng:** Bổ sung Unit Test trong `ChatServiceTest.java`:
+  - [x] Test thả cảm xúc (`toggleMessageReaction`) thêm mới & gỡ bỏ khi bấm lần 2.
+  - [x] Test gửi tin nhắn có `replyToId` hợp lệ và báo lỗi `400` khi trích dẫn tin nhắn của cuộc hội thoại khác.
+  - [x] Test phân trang lịch sử tin nhắn (`getPagedMessages`).
+- [x] **Chiều:** Chạy `./mvnw test` đạt 100% PASS và `npm run build` sạch sẽ không lỗi TypeScript.
 
 ---
 
@@ -146,11 +146,11 @@
 
 | Trạng thái | Mã Task | Người phụ trách | Tên công việc chi tiết | Ước lượng | Tiêu chuẩn Hoàn thành (DoD) |
 | :---: | :--- | :---: | :--- | :---: | :--- |
-| [ ] | **W6-TV1-01** | **TV1** | Entity `MessageReaction`, cột `reply_to_id` & Repository | 5h | Bảng `message_reactions` có unique constraint; không lỗi N+1 query. |
-| [ ] | **W6-TV1-02** | **TV1** | Service & REST API Reaction, Reply & Phân trang Tin nhắn | 7h | Toggle reaction broadcast `/topic/chat/{id}/reaction`; API paged hoạt động mượt. |
-| [ ] | **W6-TV1-03** | **TV1** | Giao diện Emoji Reaction Picker & Tooltip danh sách người thả | 6h | Rê chuột chọn 6 emoji nhanh; số đếm cập nhật realtime giữa 2 tab. |
-| [ ] | **W6-TV1-04** | **TV1** | Giao diện Trả lời trích dẫn (Reply/Quote) & Tải thêm tin cũ | 8h | Bấm khối trích dẫn cuộn tới tin gốc; tải thêm tin cũ không giật vị trí cuộn. |
-| [ ] | **W6-TV1-05** | **TV1** | Unit Tests Reaction, Reply & Pagination (`ChatServiceTest`) | 4h | Toàn bộ test suite Backend & Frontend build PASS 100%. |
+| [x] | **W6-TV1-01** | **TV1** | Entity `MessageReaction`, cột `reply_to_id` & Repository | 5h | Bảng `message_reactions` có unique constraint; không lỗi N+1 query. |
+| [x] | **W6-TV1-02** | **TV1** | Service & REST API Reaction, Reply & Phân trang Tin nhắn | 7h | Toggle reaction broadcast `/topic/chat/{id}/reaction`; API paged hoạt động mượt. |
+| [x] | **W6-TV1-03** | **TV1** | Giao diện Emoji Reaction Picker & Tooltip danh sách người thả | 6h | Rê chuột chọn 6 emoji nhanh; số đếm cập nhật realtime giữa 2 tab. |
+| [x] | **W6-TV1-04** | **TV1** | Giao diện Trả lời trích dẫn (Reply/Quote) & Tải thêm tin cũ | 8h | Bấm khối trích dẫn cuộn tới tin gốc; tải thêm tin cũ không giật vị trí cuộn. |
+| [x] | **W6-TV1-05** | **TV1** | Unit Tests Reaction, Reply & Pagination (`ChatServiceTest`) | 4h | Toàn bộ test suite Backend & Frontend build PASS 100%. |
 | [ ] | **W6-TV2-01** | **TV2** | Cấu hình Coturn STUN/TURN Server & API `/api/call/ice-servers` | 6h | Service Coturn chạy ổn định trên Docker; Client nhận ICE config động. |
 | [ ] | **W6-TV2-02** | **TV2** | Cơ chế ICE Restart (Auto-reconnect) & Adaptive Video Bitrate | 10h | Tự động kết nối lại sau khi rớt mạng ngắn; ưu tiên âm thanh khi mạng yếu. |
 | [ ] | **W6-TV2-03** | **TV2** | Nâng cấp `CallLogs` thống kê chi tiết & UI `CallsPage` | 6h | Hiển thị bộ lọc loại cuộc gọi, thống kê thời lượng & gọi lại 1 click. |

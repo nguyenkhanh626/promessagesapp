@@ -9,7 +9,11 @@ import com.team17.chatapp.chat.dto.ConversationMediaDto;
 import com.team17.chatapp.chat.dto.ConversationMemberDto;
 import com.team17.chatapp.chat.dto.CreateGroupConversationRequest;
 import com.team17.chatapp.chat.dto.MessageDto;
+import com.team17.chatapp.chat.dto.MessageReactionDto;
+import com.team17.chatapp.chat.dto.PagedMessagesDto;
 import com.team17.chatapp.chat.dto.PinMessageEventDto;
+import com.team17.chatapp.chat.dto.ReactionEventDto;
+import com.team17.chatapp.chat.dto.ReplyPreviewDto;
 import com.team17.chatapp.chat.dto.SendMessageRequest;
 import com.team17.chatapp.chat.dto.UpdateGroupConversationRequest;
 import com.team17.chatapp.chat.entity.Conversation;
@@ -17,9 +21,11 @@ import com.team17.chatapp.chat.entity.ConversationMember;
 import com.team17.chatapp.chat.entity.ConversationType;
 import com.team17.chatapp.chat.entity.MemberRole;
 import com.team17.chatapp.chat.entity.Message;
+import com.team17.chatapp.chat.entity.MessageReaction;
 import com.team17.chatapp.chat.entity.MessageType;
 import com.team17.chatapp.chat.repository.ConversationMemberRepository;
 import com.team17.chatapp.chat.repository.ConversationRepository;
+import com.team17.chatapp.chat.repository.MessageReactionRepository;
 import com.team17.chatapp.chat.repository.MessageRepository;
 import com.team17.chatapp.exception.AppException;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +58,7 @@ public class ChatServiceImpl implements ChatService {
     private final ConversationRepository conversationRepository;
     private final ConversationMemberRepository conversationMemberRepository;
     private final MessageRepository messageRepository;
+    private final MessageReactionRepository messageReactionRepository;
     private final UserRepository userRepository;
 
     @Override
@@ -414,6 +423,33 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional(readOnly = true)
+    public PagedMessagesDto getPagedMessages(UUID conversationId, UUID currentUserId, int page, int size) {
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, currentUserId)) {
+            throw new AppException("Bạn không có quyền xem tin nhắn của cuộc trò chuyện này", HttpStatus.FORBIDDEN);
+        }
+
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<Message> messagePage = messageRepository.findByConversationIdOrderByCreatedAtDesc(conversationId, pageable);
+
+        List<Message> chronological = new ArrayList<>(messagePage.getContent());
+        Collections.reverse(chronological);
+
+        List<MessageDto> dtos = mapMessagesToDtos(chronological);
+
+        return PagedMessagesDto.builder()
+                .content(dtos)
+                .page(messagePage.getNumber())
+                .size(messagePage.getSize())
+                .totalElements(messagePage.getTotalElements())
+                .totalPages(messagePage.getTotalPages())
+                .hasMore(messagePage.hasNext())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<MessageDto> getAllMessagesAsc(UUID conversationId, UUID currentUserId) {
         if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, currentUserId)) {
             throw new AppException("Bạn không có quyền xem tin nhắn của cuộc trò chuyện này", HttpStatus.FORBIDDEN);
@@ -513,6 +549,64 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
+    @Transactional
+    public ReactionEventDto toggleMessageReaction(UUID conversationId, UUID messageId, UUID userId, String emoji) {
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, userId)) {
+            throw new AppException("Bạn không có quyền thả cảm xúc trong cuộc trò chuyện này", HttpStatus.FORBIDDEN);
+        }
+
+        if (emoji == null || emoji.isBlank()) {
+            throw new AppException("Emoji không được để trống", HttpStatus.BAD_REQUEST);
+        }
+        String normalizedEmoji = emoji.trim();
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new AppException("Không tìm thấy tin nhắn", HttpStatus.NOT_FOUND));
+
+        if (!message.getConversationId().equals(conversationId)) {
+            throw new AppException("Tin nhắn không thuộc cuộc trò chuyện này", HttpStatus.BAD_REQUEST);
+        }
+
+        if (message.getMessageType() == MessageType.SYSTEM) {
+            throw new AppException("Không thể thả cảm xúc cho tin nhắn hệ thống", HttpStatus.BAD_REQUEST);
+        }
+
+        Optional<MessageReaction> existingOpt = messageReactionRepository
+                .findByMessageIdAndUserIdAndEmoji(messageId, userId, normalizedEmoji);
+
+        if (existingOpt.isPresent()) {
+            messageReactionRepository.delete(existingOpt.get());
+        } else {
+            MessageReaction newReaction = MessageReaction.builder()
+                    .messageId(messageId)
+                    .userId(userId)
+                    .emoji(normalizedEmoji)
+                    .build();
+            messageReactionRepository.save(newReaction);
+        }
+
+        List<MessageReaction> currentReactions = messageReactionRepository.findByMessageId(messageId);
+        Set<UUID> reactorIds = currentReactions.stream()
+                .map(MessageReaction::getUserId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, User> userMap = reactorIds.isEmpty()
+                ? Map.of()
+                : userRepository.findAllById(reactorIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
+
+        List<MessageReactionDto> grouped = buildReactionDtos(currentReactions, userMap);
+
+        log.info("Cập nhật reaction '{}' trên tin nhắn {} trong hội thoại {} bởi {}",
+                normalizedEmoji, messageId, conversationId, userId);
+
+        return ReactionEventDto.builder()
+                .conversationId(conversationId)
+                .messageId(messageId)
+                .reactions(grouped)
+                .build();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<ConversationMediaDto> getConversationMedia(UUID conversationId, UUID currentUserId, MessageType filterType) {
         if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, currentUserId)) {
@@ -556,14 +650,44 @@ public class ChatServiceImpl implements ChatService {
             return List.of();
         }
 
+        List<UUID> messageIds = messages.stream()
+                .map(Message::getId)
+                .filter(id -> id != null)
+                .collect(Collectors.toList());
+
+        Set<UUID> replyToIds = messages.stream()
+                .map(Message::getReplyToId)
+                .filter(id -> id != null)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Map<UUID, Message> replyMessageMap = replyToIds.isEmpty()
+                ? Map.of()
+                : messageRepository.findAllById(replyToIds).stream()
+                        .collect(Collectors.toMap(Message::getId, m -> m));
+
+        List<MessageReaction> allReactions = messageIds.isEmpty()
+                ? List.of()
+                : messageReactionRepository.findByMessageIdIn(messageIds);
+
+        Map<UUID, List<MessageReaction>> reactionsByMessageId = allReactions.stream()
+                .collect(Collectors.groupingBy(MessageReaction::getMessageId));
+
         Set<UUID> userIds = new LinkedHashSet<>();
         for (Message msg : messages) {
             if (msg.getSenderId() != null) userIds.add(msg.getSenderId());
             if (msg.getPinnedBy() != null) userIds.add(msg.getPinnedBy());
         }
+        for (Message replyMsg : replyMessageMap.values()) {
+            if (replyMsg.getSenderId() != null) userIds.add(replyMsg.getSenderId());
+        }
+        for (MessageReaction r : allReactions) {
+            if (r.getUserId() != null) userIds.add(r.getUserId());
+        }
 
-        Map<UUID, User> userMap = userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<UUID, User> userMap = userIds.isEmpty()
+                ? Map.of()
+                : userRepository.findAllById(userIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
 
         return messages.stream().map(msg -> {
             User sender = userMap.get(msg.getSenderId());
@@ -571,8 +695,58 @@ public class ChatServiceImpl implements ChatService {
             String senderAvatar = sender != null ? sender.getAvatarUrl() : null;
             User pinner = msg.getPinnedBy() != null ? userMap.get(msg.getPinnedBy()) : null;
             String pinnedByName = pinner != null ? pinner.getDisplayName() : null;
-            return MessageDto.from(msg, senderName, senderAvatar, pinnedByName);
+
+            ReplyPreviewDto replyPreview = null;
+            if (msg.getReplyToId() != null) {
+                Message parentMsg = replyMessageMap.get(msg.getReplyToId());
+                if (parentMsg != null) {
+                    User parentSender = userMap.get(parentMsg.getSenderId());
+                    String parentSenderName = parentSender != null ? parentSender.getDisplayName() : "Thành viên";
+                    replyPreview = ReplyPreviewDto.from(parentMsg, parentSenderName);
+                }
+            }
+
+            List<MessageReactionDto> reactionDtos = buildReactionDtos(
+                    reactionsByMessageId.getOrDefault(msg.getId(), List.of()),
+                    userMap
+            );
+
+            return MessageDto.from(msg, senderName, senderAvatar, pinnedByName, replyPreview, reactionDtos);
         }).collect(Collectors.toList());
+    }
+
+    private List<MessageReactionDto> buildReactionDtos(List<MessageReaction> reactions, Map<UUID, User> userMap) {
+        if (reactions == null || reactions.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, List<MessageReaction>> byEmoji = new LinkedHashMap<>();
+        for (MessageReaction r : reactions) {
+            byEmoji.computeIfAbsent(r.getEmoji(), k -> new ArrayList<>()).add(r);
+        }
+
+        return byEmoji.entrySet().stream()
+                .map(entry -> {
+                    List<UUID> ids = entry.getValue().stream()
+                            .map(MessageReaction::getUserId)
+                            .distinct()
+                            .collect(Collectors.toList());
+                    List<String> names = ids.stream()
+                            .map(uid -> {
+                                User u = userMap.get(uid);
+                                return u != null ? u.getDisplayName() : "Thành viên";
+                            })
+                            .collect(Collectors.toList());
+                    return MessageReactionDto.builder()
+                            .emoji(entry.getKey())
+                            .count(ids.size())
+                            .userIds(ids)
+                            .userNames(names)
+                            .build();
+                })
+                .sorted(Comparator.comparingInt(MessageReactionDto::getCount).reversed()
+                        .thenComparing(MessageReactionDto::getEmoji))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -600,6 +774,20 @@ public class ChatServiceImpl implements ChatService {
             }
         }
 
+        ReplyPreviewDto replyPreview = null;
+        UUID validatedReplyToId = null;
+        if (request.getReplyToId() != null) {
+            Message parentMsg = messageRepository.findById(request.getReplyToId())
+                    .orElseThrow(() -> new AppException("Tin nhắn được trích dẫn không tồn tại", HttpStatus.NOT_FOUND));
+            if (!parentMsg.getConversationId().equals(conversationId)) {
+                throw new AppException("Không thể trích dẫn tin nhắn từ cuộc trò chuyện khác", HttpStatus.BAD_REQUEST);
+            }
+            validatedReplyToId = parentMsg.getId();
+            User parentSender = userRepository.findById(parentMsg.getSenderId()).orElse(null);
+            String parentSenderName = parentSender != null ? parentSender.getDisplayName() : "Thành viên";
+            replyPreview = ReplyPreviewDto.from(parentMsg, parentSenderName);
+        }
+
         Message message = Message.builder()
                 .conversationId(conversationId)
                 .senderId(senderId)
@@ -609,6 +797,7 @@ public class ChatServiceImpl implements ChatService {
                 .fileName(request.getFileName())
                 .fileSize(request.getFileSize())
                 .important(request.isImportant())
+                .replyToId(validatedReplyToId)
                 .build();
 
         Message savedMessage = messageRepository.save(message);
@@ -630,7 +819,7 @@ public class ChatServiceImpl implements ChatService {
 
         log.info("Lưu tin nhắn mới trong hội thoại {}: sender={}, type={}", conversationId, senderId, type);
 
-        return MessageDto.from(savedMessage, senderName, senderAvatar);
+        return MessageDto.from(savedMessage, senderName, senderAvatar, null, replyPreview, List.of());
     }
 
     @Override

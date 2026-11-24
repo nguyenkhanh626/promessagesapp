@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   Bot,
+  ChevronUp,
   Download,
   Eye,
   FileText,
@@ -13,6 +14,7 @@ import {
   Phone,
   Pin,
   PinOff,
+  Reply,
   Search,
   Send,
   Smile,
@@ -32,6 +34,8 @@ import { AiMessageContent } from './AiMessageContent'
 import { ChatSummaryModal } from './ChatSummaryModal'
 import { isPdfFile, type PreviewableFile } from './FilePreviewModal'
 
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
+
 interface AiChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -43,9 +47,18 @@ interface ChatWindowProps {
   conversation: Conversation | null
   messages: Message[]
   pinnedMessages?: Message[]
+  hasMoreMessages?: boolean
+  isLoadingMoreMessages?: boolean
+  onLoadOlderMessages?: () => Promise<void>
   currentUser: User | null
-  onSendMessage: (content: string, attachmentFile?: File | null, important?: boolean) => Promise<void>
+  onSendMessage: (
+    content: string,
+    attachmentFile?: File | null,
+    important?: boolean,
+    replyToId?: string
+  ) => Promise<void>
   onTogglePinMessage?: (message: Message) => Promise<void>
+  onToggleReaction?: (messageId: string, emoji: string) => Promise<void>
   onTypingChange?: (typing: boolean) => void
   typingUsers?: TypingEvent[]
   isSending: boolean
@@ -62,9 +75,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
   messages,
   pinnedMessages = [],
+  hasMoreMessages = false,
+  isLoadingMoreMessages = false,
+  onLoadOlderMessages,
   currentUser,
   onSendMessage,
   onTogglePinMessage,
+  onToggleReaction,
   onTypingChange,
   typingUsers = [],
   isSending,
@@ -78,6 +95,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 }) => {
   const [inputText, setInputText] = useState('')
   const [isImportant, setIsImportant] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
   const [aiMessages, setAiMessages] = useState<AiChatMessage[]>([])
@@ -93,7 +111,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
   const [activeRoomCount, setActiveRoomCount] = useState<number>(0)
 
+  const messageListRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const lastBottomMessageIdRef = useRef<string | null>(null)
+  const prevScrollHeightRef = useRef<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const typingTimeoutRef = useRef<any>(null)
@@ -141,12 +163,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Bảo toàn vị trí cuộn khi tải thêm tin cũ, và chỉ tự cuộn xuống đáy khi có tin mới ở cuối
   useEffect(() => {
-    scrollToBottom()
+    const container = messageListRef.current
+    if (prevScrollHeightRef.current !== null && container) {
+      const diff = container.scrollHeight - prevScrollHeightRef.current
+      if (diff > 0) {
+        container.scrollTop = diff
+      }
+      prevScrollHeightRef.current = null
+      return
+    }
+
+    const latestId = messages.length > 0 ? messages[messages.length - 1].id : null
+    if (latestId && latestId !== lastBottomMessageIdRef.current) {
+      lastBottomMessageIdRef.current = latestId
+      scrollToBottom()
+    }
   }, [messages])
 
   useEffect(() => {
-    scrollToBottom()
+    if (aiMessages.length > 0) {
+      scrollToBottom()
+    }
   }, [aiMessages])
 
   useEffect(() => {
@@ -160,12 +199,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setFilePreviewUrl(null)
     setInputText('')
     setIsImportant(false)
+    setReplyingTo(null)
     setShowMessageSearch(false)
     setMessageSearchQuery('')
     setSearchedMessages([])
     setHighlightedMessageId(null)
+    lastBottomMessageIdRef.current = null
+    prevScrollHeightRef.current = null
     isTypingSentRef.current = false
   }, [conversation?.id])
+
+  const handleLoadOlderClick = async () => {
+    if (!onLoadOlderMessages || isLoadingMoreMessages) return
+    if (messageListRef.current) {
+      prevScrollHeightRef.current = messageListRef.current.scrollHeight
+    }
+    await onLoadOlderMessages()
+  }
 
   useEffect(() => {
     if (jumpToMessageId) {
@@ -314,11 +364,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
 
     const importantFlag = isImportant
+    const replyToId = replyingTo?.id
     setInputText('')
     setIsImportant(false)
+    setReplyingTo(null)
     clearSelectedFile()
 
-    await onSendMessage(textToSend, fileToSend, importantFlag)
+    await onSendMessage(textToSend, fileToSend, importantFlag, replyToId)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -691,7 +743,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {/* Danh sách tin nhắn */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div ref={messageListRef} className="flex-1 overflow-y-auto p-6 space-y-4">
+        {hasMoreMessages && onLoadOlderMessages && (
+          <div className="flex justify-center pb-2">
+            <button
+              type="button"
+              onClick={handleLoadOlderClick}
+              disabled={isLoadingMoreMessages}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#26262b] hover:bg-[#32323a] border border-[#3c3c45] text-xs font-semibold text-indigo-200 disabled:opacity-50 transition-colors"
+            >
+              <ChevronUp size={14} />
+              <span>{isLoadingMoreMessages ? 'Đang tải tin nhắn cũ...' : 'Tải tin nhắn cũ hơn'}</span>
+            </button>
+          </div>
+        )}
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-500 text-xs">
             <p className="mb-1 text-sm font-semibold text-gray-400">Chưa có tin nhắn nào</p>
@@ -785,12 +850,55 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             const isImage = msg.messageType === 'IMAGE' && msg.fileUrl
             const isFile = msg.messageType === 'FILE' && msg.fileUrl
             const isHighlighted = highlightedMessageId === msg.id
+            const reactions = msg.reactions || []
+
+            const quickActionToolbar = (
+              <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 px-1.5 py-1 rounded-full bg-[#26262c] border border-[#3c3c46] shadow-lg transition-opacity shrink-0 mb-1">
+                {onToggleReaction &&
+                  QUICK_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => onToggleReaction(msg.id, emoji)}
+                      className="h-6 w-6 rounded-full hover:bg-[#3a3a44] hover:scale-115 flex items-center justify-center text-sm transition-transform"
+                      title={`Thả cảm xúc ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyingTo(msg)
+                    inputRef.current?.focus()
+                  }}
+                  className="h-6 w-6 rounded-full text-gray-300 hover:text-white hover:bg-[#3a3a44] flex items-center justify-center transition-colors"
+                  title="Trả lời tin nhắn này"
+                >
+                  <Reply size={13} />
+                </button>
+                {onTogglePinMessage && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePinMessage(msg)}
+                    className={`h-6 w-6 rounded-full flex items-center justify-center transition-colors ${
+                      msg.pinned
+                        ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/35'
+                        : 'text-gray-300 hover:text-white hover:bg-[#3a3a44]'
+                    }`}
+                    title={msg.pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn'}
+                  >
+                    {msg.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+                  </button>
+                )}
+              </div>
+            )
 
             return (
               <div
                 id={`msg-${msg.id}`}
                 key={msg.id}
-                className={`group flex items-end gap-2.5 transition-all rounded-xl p-1 ${
+                className={`group flex items-end gap-2 transition-all rounded-xl p-1 ${
                   isMe ? 'justify-end' : 'justify-start'
                 } ${isHighlighted ? 'ring-2 ring-amber-400 bg-amber-500/10' : ''}`}
               >
@@ -806,160 +914,187 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   </div>
                 )}
 
-                {isMe && onTogglePinMessage && (
-                  <button
-                    type="button"
-                    onClick={() => onTogglePinMessage(msg)}
-                    className={`opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg flex items-center justify-center transition-all shrink-0 mb-1 ${
-                      msg.pinned
-                        ? 'opacity-100 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-[#2c2c32]'
+                {isMe && quickActionToolbar}
+
+                <div className={`max-w-[70%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div
+                    className={`w-full rounded-2xl px-4 py-2.5 text-sm shadow-md transition-all ${
+                      msg.important
+                        ? isMe
+                          ? 'bg-[#5B5FC7] text-white rounded-br-sm border-2 border-rose-400 shadow-rose-500/15'
+                          : 'bg-[#2a2225] text-gray-100 rounded-bl-sm border-2 border-rose-500/70'
+                        : isMe
+                          ? 'bg-[#5B5FC7] text-white rounded-br-sm'
+                          : 'bg-[#262626] text-gray-100 rounded-bl-sm border border-[#383838]'
                     }`}
-                    title={msg.pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn'}
                   >
-                    {msg.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                  </button>
-                )}
-
-                <div
-                  className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm shadow-md transition-all ${
-                    msg.important
-                      ? isMe
-                        ? 'bg-[#5B5FC7] text-white rounded-br-sm border-2 border-rose-400 shadow-rose-500/15'
-                        : 'bg-[#2a2225] text-gray-100 rounded-bl-sm border-2 border-rose-500/70'
-                      : isMe
-                        ? 'bg-[#5B5FC7] text-white rounded-br-sm'
-                        : 'bg-[#262626] text-gray-100 rounded-bl-sm border border-[#383838]'
-                  }`}
-                >
-                  {(msg.important || msg.pinned) && (
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                      {msg.important && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/25 border border-rose-400/50 text-[10px] font-bold text-rose-200 uppercase tracking-wide">
-                          <AlertCircle size={10} />
-                          Quan trọng
-                        </span>
-                      )}
-                      {msg.pinned && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[10px] font-semibold text-amber-200">
-                          <Pin size={10} />
-                          Đã ghim
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {!isMe && (
-                    <p className="text-[11px] font-bold text-[#9ba0ff] mb-1">
-                      {msg.senderName}
-                    </p>
-                  )}
-
-                  {/* Render Hình ảnh đính kèm */}
-                  {isImage && (
-                    <div className="mb-2 overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                      <img
-                        src={msg.fileUrl}
-                        alt={msg.fileName || msg.content}
-                        onClick={() =>
-                          onPreviewFile?.({
-                            fileUrl: msg.fileUrl!,
-                            fileName: msg.fileName || msg.content,
-                            messageType: 'IMAGE',
-                            fileSize: msg.fileSize,
-                          })
-                        }
-                        className="max-h-72 w-auto object-contain cursor-pointer hover:opacity-95 transition-opacity"
-                      />
-                    </div>
-                  )}
-
-                  {/* Render Tệp tài liệu đính kèm */}
-                  {isFile && (
-                    <div
-                      className={`mb-1.5 flex items-center justify-between gap-3 p-2.5 rounded-xl border ${
-                        isMe
-                          ? 'bg-black/20 border-white/15'
-                          : 'bg-[#1b1b1b] border-[#383838]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="h-9 w-9 rounded-lg bg-[#5B5FC7]/30 flex items-center justify-center text-white shrink-0">
-                          <FileText size={18} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white truncate max-w-[200px]">
-                            {msg.fileName || msg.content || 'Tệp đính kèm'}
-                          </p>
-                          {msg.fileSize && (
-                            <p className="text-[10px] text-gray-300 opacity-80">
-                              {formatFileSize(msg.fileSize)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {isPdfFile(msg.fileName, msg.fileUrl) && onPreviewFile && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onPreviewFile({
-                                fileUrl: msg.fileUrl!,
-                                fileName: msg.fileName || msg.content,
-                                messageType: 'FILE',
-                                fileSize: msg.fileSize,
-                              })
-                            }
-                            className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors"
-                            title="Xem trước PDF trực tiếp"
-                          >
-                            <Eye size={15} />
-                          </button>
+                    {(msg.important || msg.pinned) && (
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                        {msg.important && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/25 border border-rose-400/50 text-[10px] font-bold text-rose-200 uppercase tracking-wide">
+                            <AlertCircle size={10} />
+                            Quan trọng
+                          </span>
                         )}
-                        <a
-                          href={`${msg.fileUrl}?download=true`}
-                          download={msg.fileName || true}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-                          title="Tải tệp xuống"
-                        >
-                          <Download size={15} />
-                        </a>
+                        {msg.pinned && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[10px] font-semibold text-amber-200">
+                            <Pin size={10} />
+                            Đã ghim
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Nội dung chữ (nếu có) */}
-                  {msg.content &&
-                    (!isFile || (msg.fileName && msg.content !== msg.fileName)) &&
-                    (!isImage || (msg.fileName && msg.content !== msg.fileName)) && (
-                      <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
                     )}
 
-                  <p
-                    className={`text-[10px] mt-1 text-right select-none ${
-                      isMe ? 'text-indigo-200' : 'text-gray-400'
-                    }`}
-                  >
-                    {formatMessageTime(msg.createdAt)}
-                  </p>
+                    {!isMe && (
+                      <p className="text-[11px] font-bold text-[#9ba0ff] mb-1">
+                        {msg.senderName}
+                      </p>
+                    )}
+
+                    {/* Khối trích dẫn tin nhắn gốc (Reply/Quote) */}
+                    {msg.replyTo && (
+                      <button
+                        type="button"
+                        onClick={() => scrollToMessage(msg.replyTo!.id)}
+                        className={`w-full text-left mb-2 pl-2.5 pr-2 py-1.5 rounded-lg border-l-2 transition-colors ${
+                          isMe
+                            ? 'bg-black/20 hover:bg-black/30 border-indigo-200'
+                            : 'bg-[#1b1b20] hover:bg-[#222228] border-[#7f85f5]'
+                        }`}
+                        title="Nhấn để cuộn tới tin nhắn gốc"
+                      >
+                        <p className={`text-[10px] font-bold ${isMe ? 'text-indigo-200' : 'text-[#9ba0ff]'}`}>
+                          <Reply size={10} className="inline mr-1" />
+                          {msg.replyTo.senderName}
+                        </p>
+                        <p className={`text-xs truncate ${isMe ? 'text-indigo-100/90' : 'text-gray-300'}`}>
+                          {msg.replyTo.messageType === 'IMAGE'
+                            ? `📷 ${msg.replyTo.fileName || msg.replyTo.content}`
+                            : msg.replyTo.messageType === 'FILE'
+                              ? `📎 ${msg.replyTo.fileName || msg.replyTo.content}`
+                              : msg.replyTo.content}
+                        </p>
+                      </button>
+                    )}
+
+                    {/* Render Hình ảnh đính kèm */}
+                    {isImage && (
+                      <div className="mb-2 overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                        <img
+                          src={msg.fileUrl}
+                          alt={msg.fileName || msg.content}
+                          onClick={() =>
+                            onPreviewFile?.({
+                              fileUrl: msg.fileUrl!,
+                              fileName: msg.fileName || msg.content,
+                              messageType: 'IMAGE',
+                              fileSize: msg.fileSize,
+                            })
+                          }
+                          className="max-h-72 w-auto object-contain cursor-pointer hover:opacity-95 transition-opacity"
+                        />
+                      </div>
+                    )}
+
+                    {/* Render Tệp tài liệu đính kèm */}
+                    {isFile && (
+                      <div
+                        className={`mb-1.5 flex items-center justify-between gap-3 p-2.5 rounded-xl border ${
+                          isMe
+                            ? 'bg-black/20 border-white/15'
+                            : 'bg-[#1b1b1b] border-[#383838]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-9 w-9 rounded-lg bg-[#5B5FC7]/30 flex items-center justify-center text-white shrink-0">
+                            <FileText size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white truncate max-w-[200px]">
+                              {msg.fileName || msg.content || 'Tệp đính kèm'}
+                            </p>
+                            {msg.fileSize && (
+                              <p className="text-[10px] text-gray-300 opacity-80">
+                                {formatFileSize(msg.fileSize)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isPdfFile(msg.fileName, msg.fileUrl) && onPreviewFile && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onPreviewFile({
+                                  fileUrl: msg.fileUrl!,
+                                  fileName: msg.fileName || msg.content,
+                                  messageType: 'FILE',
+                                  fileSize: msg.fileSize,
+                                })
+                              }
+                              className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors"
+                              title="Xem trước PDF trực tiếp"
+                            >
+                              <Eye size={15} />
+                            </button>
+                          )}
+                          <a
+                            href={`${msg.fileUrl}?download=true`}
+                            download={msg.fileName || true}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                            title="Tải tệp xuống"
+                          >
+                            <Download size={15} />
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nội dung chữ (nếu có) */}
+                    {msg.content &&
+                      (!isFile || (msg.fileName && msg.content !== msg.fileName)) &&
+                      (!isImage || (msg.fileName && msg.content !== msg.fileName)) && (
+                        <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
+                      )}
+
+                    <p
+                      className={`text-[10px] mt-1 text-right select-none ${
+                        isMe ? 'text-indigo-200' : 'text-gray-400'
+                      }`}
+                    >
+                      {formatMessageTime(msg.createdAt)}
+                    </p>
+                  </div>
+
+                  {/* Nhãn Emoji Reactions dưới bong bóng chat */}
+                  {reactions.length > 0 && (
+                    <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      {reactions.map((r) => {
+                        const reactedByMe = currentUser?.id ? r.userIds.includes(currentUser.id) : false
+                        return (
+                          <button
+                            key={r.emoji}
+                            type="button"
+                            onClick={() => onToggleReaction?.(msg.id, r.emoji)}
+                            title={r.userNames.join(', ')}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+                              reactedByMe
+                                ? 'bg-[#5B5FC7]/30 border-[#7f85f5] text-white font-semibold'
+                                : 'bg-[#26262b] border-[#3c3c46] text-gray-200 hover:bg-[#32323a]'
+                            }`}
+                          >
+                            <span>{r.emoji}</span>
+                            <span className="text-[11px]">{r.count}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {!isMe && onTogglePinMessage && (
-                  <button
-                    type="button"
-                    onClick={() => onTogglePinMessage(msg)}
-                    className={`opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg flex items-center justify-center transition-all shrink-0 mb-1 ${
-                      msg.pinned
-                        ? 'opacity-100 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-[#2c2c32]'
-                    }`}
-                    title={msg.pinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn'}
-                  >
-                    {msg.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                  </button>
-                )}
+                {!isMe && quickActionToolbar}
               </div>
             )
           })
@@ -1014,6 +1149,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <span className="italic">
             {activeTypers.map((t) => t.displayName).join(', ')} đang nhập tin nhắn...
           </span>
+        </div>
+      )}
+
+      {/* Thanh hiển thị tin nhắn đang trả lời trích dẫn (Reply Preview Banner) */}
+      {replyingTo && (
+        <div className="px-4 py-2 bg-[#24242c] border-t border-[#383844] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0 border-l-2 border-[#7f85f5] pl-3">
+            <Reply size={15} className="text-[#9ba0ff] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-[#9ba0ff]">
+                Đang trả lời {replyingTo.senderName}
+              </p>
+              <p className="text-xs text-gray-300 truncate">
+                {replyingTo.messageType === 'IMAGE'
+                  ? `📷 ${replyingTo.fileName || replyingTo.content}`
+                  : replyingTo.messageType === 'FILE'
+                    ? `📎 ${replyingTo.fileName || replyingTo.content}`
+                    : replyingTo.content}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReplyingTo(null)}
+            className="h-7 w-7 rounded-full bg-[#34343e] hover:bg-[#444452] flex items-center justify-center text-gray-300 hover:text-white transition-colors shrink-0"
+            title="Hủy trả lời"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -1081,6 +1245,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </span>
             )}
             <input
+              ref={inputRef}
               type="text"
               value={inputText}
               onChange={handleInputChange}
