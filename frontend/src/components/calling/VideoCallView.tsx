@@ -11,6 +11,7 @@ import {
   Settings,
   MonitorUp,
   MonitorOff,
+  RefreshCw,
 } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
 import { useAuth } from '../../context/AuthContext'
@@ -33,6 +34,8 @@ export const VideoCallView: React.FC = () => {
     localScreenStream,
     remoteStream,
     iceConnectionState,
+    isReconnecting,
+    networkStats,
     endCall,
     toggleMute,
     toggleVideo,
@@ -116,19 +119,34 @@ export const VideoCallView: React.FC = () => {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
 
-  // Phân loại nhãn và màu sắc chất lượng đường truyền mạng
+  // Phân loại nhãn và màu sắc chất lượng đường truyền mạng (kết hợp ICE State & NetworkStats)
   const getNetworkQualityInfo = () => {
-    switch (iceConnectionState) {
-      case 'connected':
-      case 'completed':
-        return { label: 'Đường truyền tốt (HD)', color: 'bg-emerald-500', text: 'text-emerald-400' }
-      case 'checking':
-      case 'new':
-        return { label: 'Đang kết nối...', color: 'bg-amber-500 animate-pulse', text: 'text-amber-400' }
-      case 'disconnected':
-      case 'failed':
+    if (isReconnecting || iceConnectionState === 'disconnected' || iceConnectionState === 'failed') {
+      return { label: 'Đang kết nối lại...', color: 'bg-amber-500 animate-ping', text: 'text-amber-300' }
+    }
+    if (iceConnectionState === 'checking' || iceConnectionState === 'new') {
+      return { label: 'Đang kết nối...', color: 'bg-amber-500 animate-pulse', text: 'text-amber-400' }
+    }
+    switch (networkStats.quality) {
+      case 'POOR':
+        return {
+          label: `Mạng yếu (${networkStats.rttMs}ms)`,
+          color: 'bg-rose-500 animate-pulse',
+          text: 'text-rose-400',
+        }
+      case 'FAIR':
+        return {
+          label: `Trung bình (${networkStats.rttMs}ms)`,
+          color: 'bg-amber-400',
+          text: 'text-amber-300',
+        }
+      case 'GOOD':
       default:
-        return { label: 'Mạng chập chờn', color: 'bg-rose-500 animate-ping', text: 'text-rose-400' }
+        return {
+          label: networkStats.rttMs > 0 ? `Tốt (${networkStats.rttMs}ms)` : 'Đường truyền tốt (HD)',
+          color: 'bg-emerald-500',
+          text: 'text-emerald-400',
+        }
     }
   }
 
@@ -196,6 +214,14 @@ export const VideoCallView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Banner cảnh báo mất mạng đang tự động ICE Restart */}
+        {isReconnecting && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-amber-500/90 backdrop-blur-md px-4 py-1.5 text-xs font-bold text-black shadow-xl">
+            <RefreshCw size={14} className="animate-spin" />
+            <span>Đang kết nối lại cuộc gọi...</span>
+          </div>
+        )}
 
         {/* Huy hiệu trạng thái chia sẻ màn hình */}
         {(isRemoteScreenSharing || isScreenSharing) && (

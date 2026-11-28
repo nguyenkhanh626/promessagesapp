@@ -3,7 +3,7 @@
  * Mỗi peerId trong phòng họp sẽ có một RTCPeerConnection độc lập.
  */
 
-const RTC_CONFIG: RTCConfiguration = {
+const DEFAULT_RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -17,11 +17,22 @@ export interface MeshPeerCallbacks {
 }
 
 export class MeshWebRtcManager {
+  private rtcConfig: RTCConfiguration = DEFAULT_RTC_CONFIG
   private peers: Map<string, RTCPeerConnection> = new Map()
   private remoteStreams: Map<string, MediaStream> = new Map()
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
   private localStream: MediaStream | null = null
   private activeScreenTrack: MediaStreamTrack | null = null
+
+  public setIceServers(iceServers: RTCIceServer[]) {
+    if (Array.isArray(iceServers) && iceServers.length > 0) {
+      this.rtcConfig = { iceServers }
+    }
+  }
+
+  public getPeerConnections(): Map<string, RTCPeerConnection> {
+    return this.peers
+  }
 
   public setLocalStream(stream: MediaStream | null) {
     this.localStream = stream
@@ -39,7 +50,7 @@ export class MeshWebRtcManager {
       this.localStream = localStream
     }
 
-    const pc = new RTCPeerConnection(RTC_CONFIG)
+    const pc = new RTCPeerConnection(this.rtcConfig)
     const remoteStream = new MediaStream()
     this.peers.set(peerId, pc)
     this.remoteStreams.set(peerId, remoteStream)
@@ -96,6 +107,48 @@ export class MeshWebRtcManager {
     })
     await pc.setLocalDescription(offer)
     return offer
+  }
+
+  public async createIceRestartOffer(peerId: string): Promise<RTCSessionDescriptionInit | null> {
+    const pc = this.peers.get(peerId)
+    if (!pc) return null
+    try {
+      const offer = await pc.createOffer({ iceRestart: true })
+      await pc.setLocalDescription(offer)
+      console.log(`🔄 [Mesh WebRTC] Đã tạo ICE Restart Offer tới '${peerId}'`)
+      return offer
+    } catch (err) {
+      console.warn(`⚠️ [Mesh WebRTC] Lỗi tạo ICE Restart Offer cho '${peerId}':`, err)
+      return null
+    }
+  }
+
+  public async applyMaxVideoBitrateForAllPeers(maxBitrateBps: number | null): Promise<void> {
+    const tasks: Promise<void>[] = []
+    this.peers.forEach((pc, peerId) => {
+      const videoSender = pc.getSenders().find((s) => s.track?.kind === 'video')
+      if (!videoSender) return
+
+      try {
+        const params = videoSender.getParameters()
+        if (!params.encodings || params.encodings.length === 0) {
+          params.encodings = [{}]
+        }
+        if (maxBitrateBps && maxBitrateBps > 0) {
+          params.encodings[0].maxBitrate = maxBitrateBps
+        } else {
+          delete params.encodings[0].maxBitrate
+        }
+        tasks.push(
+          videoSender.setParameters(params).catch((err) => {
+            console.warn(`⚠️ [Mesh WebRTC] Lỗi setParameters cho '${peerId}':`, err)
+          })
+        )
+      } catch (err) {
+        console.warn(`⚠️ [Mesh WebRTC] Không thể cập nhật maxBitrate cho '${peerId}':`, err)
+      }
+    })
+    await Promise.all(tasks)
   }
 
   public async handleOffer(

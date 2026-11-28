@@ -1,10 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
-import type { CallMode, CallStatus, CallUserInfo, GroupParticipant, SignalMessage } from '../types/calling'
+import type {
+  CallMode,
+  CallStatus,
+  CallUserInfo,
+  GroupParticipant,
+  NetworkStats,
+  SignalMessage,
+} from '../types/calling'
 import { signalingService } from '../services/signalingService'
+import { callService } from '../services/callService'
 import { webrtcManager } from '../services/webrtcManager'
 import { meshWebrtcManager } from '../services/meshWebrtcManager'
 import { callSounds } from '../utils/callSounds'
 import { useMediaStream } from '../hooks/useMediaStream'
+import { useNetworkQuality } from '../hooks/useNetworkQuality'
 import { useAuth } from './AuthContext'
 
 interface CallContextType {
@@ -27,6 +36,8 @@ interface CallContextType {
   localScreenStream: MediaStream | null
   remoteStream: MediaStream | null
   iceConnectionState: RTCIceConnectionState
+  isReconnecting: boolean
+  networkStats: NetworkStats
   isMinimized: boolean
   errorMessage: string | null
   startCall: (target: CallUserInfo, type?: 'AUDIO' | 'VIDEO') => Promise<void>
@@ -63,12 +74,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeScreenSharerId, setActiveScreenSharerId] = useState<string | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState>('new')
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false)
 
   const callModeRef = useRef<CallMode>('DIRECT')
   const groupLocalStreamRef = useRef<MediaStream | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const durationTimerRef = useRef<any>(null)
   const timeoutTimerRef = useRef<any>(null)
+  const iceRestartTimersRef = useRef<Map<string, any>>(new Map())
+  const iceRestartAttemptsRef = useRef<Map<string, number>>(new Map())
 
   const {
     localVideoStream,
@@ -100,10 +114,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [])
 
-  // Kết nối Signaling Server khi có Auth Token
+  // Kết nối Signaling Server & nạp cấu hình ICE Servers (STUN/TURN) khi có Auth Token
   useEffect(() => {
     if (token) {
       signalingService.connect(token)
+      callService.getIceServers().then((servers) => {
+        webrtcManager.setIceServers(servers)
+        meshWebrtcManager.setIceServers(servers)
+      })
     } else {
       signalingService.disconnect()
     }
@@ -116,6 +134,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     meshWebrtcManager.closeAll()
     groupLocalStreamRef.current = null
     callModeRef.current = 'DIRECT'
+    iceRestartTimersRef.current.forEach((t) => clearTimeout(t))
+    iceRestartTimersRef.current.clear()
+    iceRestartAttemptsRef.current.clear()
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current)
       durationTimerRef.current = null
@@ -141,7 +162,54 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveScreenSharerId(null)
     setRemoteStream(null)
     setIceConnectionState('new')
+    setIsReconnecting(false)
   }, [stopStream])
+
+  const { networkStats } = useNetworkQuality({
+    isConnected: callStatus === 'CONNECTED',
+    callMode,
+    hasVideo: currentCallType === 'VIDEO' || isScreenSharing,
+  })
+
+  const triggerIceRestartForPeer = useCallback(
+    async (peerId: string) => {
+      if (!currentRoomId || callStatus !== 'CONNECTED') return
+      const attempts = iceRestartAttemptsRef.current.get(peerId) || 0
+      if (attempts >= 3) {
+        console.warn(`⚠️ [ICE Restart] Đã thử tối đa 3 lần cho peer '${peerId}'.`)
+        return
+      }
+      iceRestartAttemptsRef.current.set(peerId, attempts + 1)
+      setIsReconnecting(true)
+
+      if (callModeRef.current === 'GROUP') {
+        const offer = await meshWebrtcManager.createIceRestartOffer(peerId)
+        if (offer) {
+          signalingService.sendSignal({
+            type: 'ICE_RESTART',
+            senderId: user?.id || 'me',
+            senderName: user?.displayName,
+            receiverId: peerId,
+            roomId: currentRoomId,
+            payload: offer,
+          })
+        }
+      } else {
+        const offer = await webrtcManager.createIceRestartOffer()
+        if (offer) {
+          signalingService.sendSignal({
+            type: 'ICE_RESTART',
+            senderId: user?.id || 'me',
+            senderName: user?.displayName,
+            receiverId: peerId,
+            roomId: currentRoomId,
+            payload: offer,
+          })
+        }
+      }
+    },
+    [callStatus, currentRoomId, user?.id, user?.displayName]
+  )
 
   const initMeshPeerConnection = useCallback(
     (peerId: string, roomId: string) => {
@@ -322,6 +390,38 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else {
               await webrtcManager.addIceCandidate(msg.payload)
             }
+          }
+          break
+        }
+
+        case 'ICE_RESTART': {
+          if (!msg.payload) break
+          const roomId = currentRoomId || msg.roomId || ''
+          setIsReconnecting(true)
+          try {
+            if (callModeRef.current === 'GROUP') {
+              const answer = await meshWebrtcManager.handleOffer(msg.senderId, msg.payload)
+              if (answer) {
+                signalingService.sendSignal({
+                  type: 'CALL_ANSWER',
+                  senderId: user?.id || 'me',
+                  receiverId: msg.senderId,
+                  roomId,
+                  payload: answer,
+                })
+              }
+            } else {
+              const answer = await webrtcManager.handleOfferAndCreateAnswer(msg.payload)
+              signalingService.sendSignal({
+                type: 'CALL_ANSWER',
+                senderId: user?.id || 'me',
+                receiverId: msg.senderId,
+                roomId,
+                payload: answer,
+              })
+            }
+          } catch (err) {
+            console.warn('⚠️ Lỗi xử lý ICE_RESTART Offer:', err)
           }
           break
         }
@@ -537,6 +637,93 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initMeshPeerConnection,
     cleanupCallState,
   ])
+
+  // Tự động phát hiện rớt mạng và kích hoạt ICE Restart (1-1 & Nhóm)
+  useEffect(() => {
+    if (callStatus !== 'CONNECTED') return
+
+    if (callMode === 'DIRECT') {
+      const peerId = targetUser?.id || caller?.id
+      if (!peerId) return
+
+      if (iceConnectionState === 'connected' || iceConnectionState === 'completed') {
+        const existingTimer = iceRestartTimersRef.current.get(peerId)
+        if (existingTimer) {
+          clearTimeout(existingTimer)
+          iceRestartTimersRef.current.delete(peerId)
+        }
+        iceRestartAttemptsRef.current.delete(peerId)
+        setIsReconnecting(false)
+      } else if (iceConnectionState === 'disconnected' || iceConnectionState === 'failed') {
+        setIsReconnecting(true)
+        const canInitiate = Boolean(targetUser) || iceConnectionState === 'failed'
+        if (canInitiate && !iceRestartTimersRef.current.has(peerId)) {
+          const delay = iceConnectionState === 'failed' ? 500 : 2500
+          const timer = setTimeout(() => {
+            iceRestartTimersRef.current.delete(peerId)
+            triggerIceRestartForPeer(peerId)
+          }, delay)
+          iceRestartTimersRef.current.set(peerId, timer)
+        }
+      }
+      return
+    }
+
+    // Chế độ GROUP (Mesh)
+    const anyDisconnected = participants.some(
+      (p) => p.iceState === 'disconnected' || p.iceState === 'failed'
+    )
+    if (!anyDisconnected) {
+      setIsReconnecting(false)
+    }
+
+    const myId = user?.id || ''
+    participants.forEach((p) => {
+      if (p.iceState === 'connected' || p.iceState === 'completed') {
+        const timer = iceRestartTimersRef.current.get(p.userId)
+        if (timer) {
+          clearTimeout(timer)
+          iceRestartTimersRef.current.delete(p.userId)
+        }
+        iceRestartAttemptsRef.current.delete(p.userId)
+      } else if (p.iceState === 'disconnected' || p.iceState === 'failed') {
+        setIsReconnecting(true)
+        // Tránh Offer Collision: chỉ peer có ID nhỏ hơn chủ động ICE Restart
+        if (myId < p.userId && !iceRestartTimersRef.current.has(p.userId)) {
+          const delay = p.iceState === 'failed' ? 500 : 2500
+          const timer = setTimeout(() => {
+            iceRestartTimersRef.current.delete(p.userId)
+            triggerIceRestartForPeer(p.userId)
+          }, delay)
+          iceRestartTimersRef.current.set(p.userId, timer)
+        }
+      }
+    })
+  }, [callStatus, callMode, iceConnectionState, participants, targetUser, caller, user?.id, triggerIceRestartForPeer])
+
+  // Kích hoạt ICE Restart ngay khi mạng trình duyệt online trở lại
+  useEffect(() => {
+    const handleOnline = () => {
+      if (callStatus !== 'CONNECTED') return
+      if (callModeRef.current === 'DIRECT') {
+        const peerId = targetUser?.id || caller?.id
+        if (peerId && (iceConnectionState === 'disconnected' || iceConnectionState === 'failed')) {
+          iceRestartAttemptsRef.current.delete(peerId)
+          triggerIceRestartForPeer(peerId)
+        }
+      } else {
+        const myId = user?.id || ''
+        participants.forEach((p) => {
+          if (myId < p.userId && (p.iceState === 'disconnected' || p.iceState === 'failed')) {
+            iceRestartAttemptsRef.current.delete(p.userId)
+            triggerIceRestartForPeer(p.userId)
+          }
+        })
+      }
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [callStatus, iceConnectionState, participants, targetUser, caller, user?.id, triggerIceRestartForPeer])
 
   // Tham gia cuộc gọi nhóm (Mesh WebRTC 3-5 người)
   const joinGroupCall = async (
@@ -909,6 +1096,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localScreenStream,
         remoteStream,
         iceConnectionState,
+        isReconnecting,
+        networkStats,
         isMinimized,
         errorMessage: errorMessage || permissionError,
         startCall,

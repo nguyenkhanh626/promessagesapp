@@ -8,6 +8,7 @@ import com.team17.chatapp.chat.repository.ConversationRepository;
 import com.team17.chatapp.chat.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,12 +25,18 @@ public class GroupCallLifecycleService {
     private final MessageRepository messageRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    @Autowired(required = false)
+    private CallService callService;
+
     /**
      * Lưu và phát tin nhắn hệ thống "Cuộc gọi nhóm đã kết thúc." khi thành viên cuối cùng rời phòng.
      */
     @Transactional
     public void notifyGroupCallEnded(String roomId, String lastUserId) {
         if (roomId == null || roomId.isBlank()) return;
+        if (callService != null) {
+            callService.recordGroupCallLeave(roomId, lastUserId, true);
+        }
         try {
             UUID conversationId = UUID.fromString(roomId);
             conversationRepository.findById(conversationId).ifPresent(conversation -> {

@@ -11,6 +11,8 @@ import {
   PenTool,
   MonitorUp,
   MonitorOff,
+  RefreshCw,
+  Wifi,
 } from 'lucide-react'
 import { useCall } from '../../context/CallContext'
 import { useAuth } from '../../context/AuthContext'
@@ -36,6 +38,8 @@ export const ActiveCallModal: React.FC = () => {
     activeScreenSharerId,
     localVideoStream,
     localScreenStream,
+    isReconnecting,
+    networkStats,
     isMinimized,
     cancelCall,
     endCall,
@@ -85,6 +89,27 @@ export const ActiveCallModal: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              <div
+                className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${
+                  networkStats.quality === 'GOOD'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                    : networkStats.quality === 'FAIR'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                      : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                }`}
+                title={`RTT: ${networkStats.rttMs}ms • Mất gói: ${networkStats.packetLossPercent}%${
+                  networkStats.maxVideoBitrateKbps ? ` • Video: ${networkStats.maxVideoBitrateKbps} kbps` : ''
+                }`}
+              >
+                <Wifi size={12} />
+                <span>
+                  {networkStats.quality === 'GOOD'
+                    ? 'Mạng tốt'
+                    : networkStats.quality === 'FAIR'
+                      ? 'Trung bình'
+                      : 'Mạng yếu'}
+                </span>
+              </div>
               <span className="font-mono text-xs sm:text-sm text-emerald-300 bg-black/40 px-3 py-1 rounded-full border border-white/10">
                 {formatDuration(duration)}
               </span>
@@ -98,6 +123,20 @@ export const ActiveCallModal: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Banner cảnh báo mất mạng & tự động ICE Restart hoặc mạng yếu */}
+          {isReconnecting && (
+            <div className="px-5 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center justify-center gap-2 text-xs font-semibold text-amber-200">
+              <RefreshCw size={14} className="animate-spin" />
+              <span>Đang kết nối lại cuộc gọi... (ICE Restart)</span>
+            </div>
+          )}
+          {!isReconnecting && networkStats.quality === 'POOR' && (
+            <div className="px-5 py-1.5 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-center gap-2 text-[11px] text-rose-200">
+              <Wifi size={13} />
+              <span>Mạng yếu — Đang tự động giảm bitrate video để ưu tiên âm thanh mượt mà.</span>
+            </div>
+          )}
 
           {/* Lưới Video Adaptive & VAD */}
           <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
@@ -286,7 +325,14 @@ export const ActiveCallModal: React.FC = () => {
             </p>
           )}
 
-          {callStatus === 'CONNECTED' && (
+          {callStatus === 'CONNECTED' && isReconnecting && (
+            <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 px-3.5 py-1 text-xs border border-amber-500/40 text-amber-300">
+              <RefreshCw size={12} className="animate-spin" />
+              <span>Đang kết nối lại cuộc gọi...</span>
+            </div>
+          )}
+
+          {callStatus === 'CONNECTED' && !isReconnecting && (
             <div className="inline-flex items-center gap-2 rounded-full bg-[#181818] px-3.5 py-1 text-xs border border-[#383838]">
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-mono text-sm text-emerald-300 font-semibold">{formatDuration(duration)}</span>

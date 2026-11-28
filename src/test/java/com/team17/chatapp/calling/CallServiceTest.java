@@ -205,4 +205,93 @@ class CallServiceTest {
         assertNotNull(ended.getEndedAt());
         assertTrue(ended.getDurationSeconds() >= 125);
     }
+
+    @Test
+    @DisplayName("Thống kê cuộc gọi getCallStats -> Tổng hợp đúng số cuộc gọi, nhỡ, nhóm và tổng thời lượng")
+    void getCallStats_ComputesSummaryCorrectly() {
+        CallSession s1 = CallSession.builder()
+                .initiatorId(callerId)
+                .callType(CallType.VIDEO)
+                .status(CallStatus.ENDED)
+                .isGroup(false)
+                .durationSeconds(120L)
+                .build();
+        CallSession s2 = CallSession.builder()
+                .initiatorId(callerId)
+                .callType(CallType.AUDIO)
+                .status(CallStatus.MISSED)
+                .isGroup(false)
+                .durationSeconds(0L)
+                .build();
+        CallSession s3 = CallSession.builder()
+                .initiatorId(callerId)
+                .callType(CallType.VIDEO)
+                .status(CallStatus.ENDED)
+                .isGroup(true)
+                .groupName("Team Call")
+                .durationSeconds(180L)
+                .build();
+
+        when(callSessionRepository.findCallHistoryByUserId(callerId)).thenReturn(java.util.List.of(s1, s2, s3));
+
+        com.team17.chatapp.calling.dto.CallStatsDto stats = callService.getCallStats(callerId);
+
+        assertEquals(3, stats.getTotalCalls());
+        assertEquals(2, stats.getCompletedCalls());
+        assertEquals(1, stats.getMissedCalls());
+        assertEquals(1, stats.getGroupCalls());
+        assertEquals(300, stats.getTotalDurationSeconds());
+    }
+
+    @Test
+    @DisplayName("Lọc lịch sử cuộc gọi theo Loại (GROUP/VIDEO/AUDIO) và Trạng thái (COMPLETED/MISSED)")
+    void getCallHistoryFiltered_FiltersByTypeAndStatus() {
+        CallSession audioEnded = CallSession.builder()
+                .callType(CallType.AUDIO).status(CallStatus.ENDED).isGroup(false).build();
+        CallSession videoMissed = CallSession.builder()
+                .callType(CallType.VIDEO).status(CallStatus.MISSED).isGroup(false).build();
+        CallSession groupEnded = CallSession.builder()
+                .callType(CallType.VIDEO).status(CallStatus.ENDED).isGroup(true).build();
+
+        when(callSessionRepository.findCallHistoryByUserId(callerId))
+                .thenReturn(java.util.List.of(audioEnded, videoMissed, groupEnded));
+
+        assertEquals(1, callService.getCallHistoryFiltered(callerId, "GROUP", "ALL").size());
+        assertEquals(1, callService.getCallHistoryFiltered(callerId, "AUDIO", "COMPLETED").size());
+        assertEquals(1, callService.getCallHistoryFiltered(callerId, "VIDEO", "MISSED").size());
+        assertEquals(3, callService.getCallHistoryFiltered(callerId, "ALL", "ALL").size());
+    }
+
+    @Test
+    @DisplayName("Ghi nhận tham gia và rời cuộc gọi nhóm -> Chốt ENDED và tính duration khi phòng trống")
+    void recordGroupCallJoinAndLeave_TracksDurationOnLastLeave() {
+        String groupRoomId = UUID.randomUUID().toString();
+        CallSession activeGroup = CallSession.builder()
+                .roomId(groupRoomId)
+                .initiatorId(callerId)
+                .isGroup(true)
+                .groupName("Nhóm Test")
+                .callType(CallType.VIDEO)
+                .status(CallStatus.CONNECTED)
+                .startedAt(LocalDateTime.now().minusSeconds(45))
+                .build();
+        activeGroup.setId(UUID.randomUUID());
+
+        when(callSessionRepository.findFirstByRoomIdAndStatusInOrderByCreatedAtDesc(eq(groupRoomId), anyCollection()))
+                .thenReturn(Optional.of(activeGroup));
+        when(callParticipantRepository.findByCallSessionIdAndUserId(activeGroup.getId(), callerId))
+                .thenReturn(Optional.empty());
+        when(callParticipantRepository.findByCallSessionId(activeGroup.getId()))
+                .thenReturn(Collections.emptyList());
+        when(callSessionRepository.save(any(CallSession.class))).thenAnswer(i -> i.getArgument(0));
+
+        CallSession joined = callService.recordGroupCallJoin(groupRoomId, callerId, "Nhóm Test", CallType.VIDEO);
+        assertNotNull(joined);
+        verify(callParticipantRepository).save(any(CallParticipant.class));
+
+        CallSession ended = callService.recordGroupCallLeave(groupRoomId, callerId, true);
+        assertNotNull(ended);
+        assertEquals(CallStatus.ENDED, ended.getStatus());
+        assertTrue(ended.getDurationSeconds() >= 45);
+    }
 }

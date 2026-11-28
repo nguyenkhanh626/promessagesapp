@@ -21,6 +21,7 @@ import java.security.Principal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -322,5 +323,60 @@ class SignalingControllerTest {
                                 && "user-sharer".equals(map.get("activeScreenSharerId"))
                 )
         );
+    }
+
+    @Test
+    @DisplayName("GET /api/call/ice-servers -> Trả về danh sách ICE Servers hợp lệ")
+    void getIceServers_ReturnsDefaultOrConfiguredServers() {
+        var response = signalingController.getIceServers();
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertTrue(response.getBody().getData().containsKey("iceServers"));
+    }
+
+    @Test
+    @DisplayName("Gửi ICE_RESTART -> Chuyển tiếp thẳng Offer tới đối phương mà không tạo CallSession mới")
+    void handleP2PSignal_IceRestart_ForwardsWithoutCreatingSession() {
+        SignalMessage restartMsg = SignalMessage.builder()
+                .type(SignalType.ICE_RESTART)
+                .receiverId("user-callee")
+                .roomId("room-123")
+                .payload(java.util.Map.of("type", "offer", "sdp", "v=0..."))
+                .build();
+
+        signalingController.handleP2PSignal(restartMsg, principal);
+
+        verify(callService, org.mockito.Mockito.never()).initiateCall(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any()
+        );
+        verify(messagingTemplate).convertAndSendToUser(eq("user-callee"), eq("/queue/signals"), eq(restartMsg));
+    }
+
+    @Test
+    @DisplayName("GET /api/call/stats/{userId} -> Trả về thống kê cuộc gọi CallStatsDto")
+    void getCallStats_ReturnsStatsDto() {
+        com.team17.chatapp.calling.dto.CallStatsDto mockStats =
+                com.team17.chatapp.calling.dto.CallStatsDto.builder()
+                        .totalCalls(5)
+                        .completedCalls(3)
+                        .missedCalls(1)
+                        .rejectedCalls(1)
+                        .groupCalls(2)
+                        .totalDurationSeconds(300)
+                        .build();
+
+        when(callService.getCallStats("user-sender")).thenReturn(mockStats);
+
+        var response = signalingController.getCallStats("user-sender");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(5L, response.getBody().getData().getTotalCalls());
+        assertEquals(2L, response.getBody().getData().getGroupCalls());
     }
 }

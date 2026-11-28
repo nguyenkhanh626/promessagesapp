@@ -25,6 +25,31 @@ export type SignalType =
   | 'ROOM_STATE'
   | 'SCREEN_SHARE_START'
   | 'SCREEN_SHARE_STOP'
+  | 'ICE_RESTART'
+
+/**
+ * Mức chất lượng đường truyền mạng WebRTC
+ */
+export type NetworkQualityLevel = 'GOOD' | 'FAIR' | 'POOR'
+
+export interface NetworkStats {
+  quality: NetworkQualityLevel
+  rttMs: number
+  packetLossPercent: number
+  maxVideoBitrateKbps: number | null
+}
+
+/**
+ * Thống kê tổng hợp lịch sử cuộc gọi
+ */
+export interface CallStats {
+  totalCalls: number
+  completedCalls: number
+  missedCalls: number
+  rejectedCalls: number
+  groupCalls: number
+  totalDurationSeconds: number
+}
 
 /**
  * Chế độ cuộc gọi: 1-1 (DIRECT) hoặc Nhóm (GROUP)
@@ -102,5 +127,8 @@ export interface CallHistoryItem {
   endedAt?: string
   durationSeconds?: number
   createdAt: string
+  isGroup?: boolean
+  groupName?: string
+  participantCount?: number
 }
 

@@ -4,7 +4,7 @@
  * và bắt trạng thái kết nối đường truyền ICE.
  */
 
-const RTC_CONFIG: RTCConfiguration = {
+const DEFAULT_RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -12,12 +12,23 @@ const RTC_CONFIG: RTCConfiguration = {
 }
 
 export class WebRtcManager {
+  private rtcConfig: RTCConfiguration = DEFAULT_RTC_CONFIG
   private peerConnection: RTCPeerConnection | null = null
   private localStream: MediaStream | null = null
   private remoteStream: MediaStream | null = null
   private onRemoteStreamCallback: ((stream: MediaStream) => void) | null = null
   private onIceCandidateCallback: ((candidate: RTCIceCandidate) => void) | null = null
   private onIceStateCallback: ((state: RTCIceConnectionState) => void) | null = null
+
+  public setIceServers(iceServers: RTCIceServer[]) {
+    if (Array.isArray(iceServers) && iceServers.length > 0) {
+      this.rtcConfig = { iceServers }
+    }
+  }
+
+  public getPeerConnection(): RTCPeerConnection | null {
+    return this.peerConnection
+  }
 
   public init(
     onRemoteStream: (stream: MediaStream) => void,
@@ -30,7 +41,7 @@ export class WebRtcManager {
     this.onIceCandidateCallback = onIceCandidate
     this.onIceStateCallback = onIceStateChange || null
 
-    this.peerConnection = new RTCPeerConnection(RTC_CONFIG)
+    this.peerConnection = new RTCPeerConnection(this.rtcConfig)
     this.remoteStream = new MediaStream()
 
     this.peerConnection.onicecandidate = (event) => {
@@ -147,6 +158,46 @@ export class WebRtcManager {
     // Tùy chỉnh SDP munging để tối ưu codec video (VP8/H264) nếu cần
     await this.peerConnection.setLocalDescription(offer)
     return offer
+  }
+
+  /**
+   * Tạo Offer với cờ iceRestart: true để phục hồi kết nối khi rớt mạng tạm thời
+   */
+  public async createIceRestartOffer(): Promise<RTCSessionDescriptionInit | null> {
+    if (!this.peerConnection) return null
+    try {
+      const offer = await this.peerConnection.createOffer({ iceRestart: true })
+      await this.peerConnection.setLocalDescription(offer)
+      console.log('🔄 [WebRTC] Đã tạo ICE Restart Offer')
+      return offer
+    } catch (err) {
+      console.warn('⚠️ [WebRTC] Lỗi khi tạo ICE Restart Offer:', err)
+      return null
+    }
+  }
+
+  /**
+   * Điều chỉnh giới hạn băng thông Video (maxBitrate) thích ứng khi mạng yếu
+   */
+  public async applyMaxVideoBitrate(maxBitrateBps: number | null): Promise<void> {
+    if (!this.peerConnection) return
+    const videoSender = this.peerConnection.getSenders().find((s) => s.track?.kind === 'video')
+    if (!videoSender) return
+
+    try {
+      const params = videoSender.getParameters()
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}]
+      }
+      if (maxBitrateBps && maxBitrateBps > 0) {
+        params.encodings[0].maxBitrate = maxBitrateBps
+      } else {
+        delete params.encodings[0].maxBitrate
+      }
+      await videoSender.setParameters(params)
+    } catch (err) {
+      console.warn('⚠️ [WebRTC] Không thể cập nhật maxBitrate video:', err)
+    }
   }
 
   /**

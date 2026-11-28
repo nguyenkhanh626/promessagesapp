@@ -37,5 +37,8 @@ public enum SignalType {
 
     // Chia sẻ màn hình (Tuần 5)
     SCREEN_SHARE_START, // Bắt đầu chia sẻ màn hình
-    SCREEN_SHARE_STOP   // Dừng chia sẻ màn hình
+    SCREEN_SHARE_STOP,  // Dừng chia sẻ màn hình
+
+    // Phục hồi kết nối WebRTC (Tuần 6)
+    ICE_RESTART         // Yêu cầu đàm phán lại ICE khi rớt mạng tạm thời
 }

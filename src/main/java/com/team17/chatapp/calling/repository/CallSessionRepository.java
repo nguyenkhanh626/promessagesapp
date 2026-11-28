@@ -17,7 +17,11 @@ public interface CallSessionRepository extends JpaRepository<CallSession, UUID> 
 
     Optional<CallSession> findByRoomId(String roomId);
 
-    @Query("SELECT c FROM CallSession c WHERE c.initiatorId = :userId OR c.receiverId = :userId ORDER BY c.createdAt DESC")
+    Optional<CallSession> findFirstByRoomIdAndStatusInOrderByCreatedAtDesc(String roomId, Collection<CallStatus> statuses);
+
+    @Query("SELECT DISTINCT c FROM CallSession c WHERE c.initiatorId = :userId OR c.receiverId = :userId " +
+           "OR EXISTS (SELECT 1 FROM CallParticipant cp WHERE cp.callSessionId = c.id AND cp.userId = :userId) " +
+           "ORDER BY c.createdAt DESC")
     List<CallSession> findCallHistoryByUserId(@Param("userId") String userId);
 
     List<CallSession> findByStatus(CallStatus status);

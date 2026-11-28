@@ -40,6 +40,14 @@ app:
       - "http://localhost:3000"
   upload:
     dir: uploads
+  webrtc:
+    stun-urls:
+      - "stun:stun.l.google.com:19302"
+      - "stun:stun1.l.google.com:19302"
+      - "stun:localhost:3478"
+    turn-url: ${TURN_URL:turn:localhost:3478}
+    turn-username: ${TURN_USERNAME:promessages}
+    turn-credential: ${TURN_CREDENTIAL:promessages123}
 
 gemini:
   api-key: ${GEMINI_API_KEY:}

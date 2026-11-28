@@ -56,6 +56,13 @@ public class CallSession extends BaseEntity {
     @Column(name = "duration_seconds")
     private Long durationSeconds;
 
+    @Column(name = "is_group")
+    @Builder.Default
+    private Boolean isGroup = false;
+
+    @Column(name = "group_name", length = 150)
+    private String groupName;
+
     public UUID getConversationId() {
         return conversationId;
     }

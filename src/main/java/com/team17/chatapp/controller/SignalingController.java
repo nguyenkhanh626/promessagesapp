@@ -3,11 +3,16 @@ package com.team17.chatapp.controller;
 import com.team17.chatapp.auth.entity.User;
 import com.team17.chatapp.auth.repository.UserRepository;
 import com.team17.chatapp.calling.dto.CallHistoryDto;
+import com.team17.chatapp.calling.dto.CallStatsDto;
+import com.team17.chatapp.calling.dto.IceServerDto;
 import com.team17.chatapp.calling.entity.CallSession;
 import com.team17.chatapp.calling.entity.CallType;
 import com.team17.chatapp.calling.service.CallService;
 import com.team17.chatapp.calling.service.GroupCallLifecycleService;
+import com.team17.chatapp.chat.entity.Conversation;
+import com.team17.chatapp.chat.repository.ConversationRepository;
 import com.team17.chatapp.common.ApiResponse;
+import com.team17.chatapp.config.IceServerConfigProperties;
 import com.team17.chatapp.websocket.dto.SignalMessage;
 import com.team17.chatapp.websocket.dto.SignalType;
 import com.team17.chatapp.websocket.service.UserSessionRegistry;
@@ -53,6 +58,12 @@ public class SignalingController {
 
     @Autowired(required = false)
     private GroupCallLifecycleService groupCallLifecycleService;
+
+    @Autowired(required = false)
+    private IceServerConfigProperties iceServerConfigProperties;
+
+    @Autowired(required = false)
+    private ConversationRepository conversationRepository;
 
     /**
      * Endpoint kiểm tra kết nối hai chiều (Heartbeat Ping-Pong)
@@ -159,7 +170,7 @@ public class SignalingController {
                 case CALL_CANCEL -> callService.cancelCall(roomId);
                 case CALL_TIMEOUT -> callService.timeoutCall(roomId);
                 case CALL_END -> callService.endCall(roomId);
-                case CAMERA_TOGGLE, MIC_TOGGLE, DEVICE_CHANGE, SCREEN_SHARE_START, SCREEN_SHARE_STOP -> {
+                case CAMERA_TOGGLE, MIC_TOGGLE, DEVICE_CHANGE, SCREEN_SHARE_START, SCREEN_SHARE_STOP, ICE_RESTART -> {
                     log.info("🎛️ [WebRTC Control] User '{}' gửi tín hiệu {} (Payload: {}, Room: '{}')",
                             sender, message.getType(), message.getPayload(), roomId);
                 }
@@ -268,6 +279,12 @@ public class SignalingController {
 
         sessionRegistry.joinRoom(roomId, userId);
 
+        if (callService != null) {
+            String groupName = resolveGroupName(roomId);
+            CallType groupCallType = message.getCallType() != null ? message.getCallType() : CallType.VIDEO;
+            callService.recordGroupCallJoin(roomId, userId, groupName, groupCallType);
+        }
+
         List<Map<String, String>> existingProfiles = existingMemberIds.stream()
                 .map(this::buildParticipantProfile)
                 .collect(Collectors.toList());
@@ -327,6 +344,11 @@ public class SignalingController {
             sessionRegistry.clearRoomScreenSharer(roomId, userId);
             sessionRegistry.leaveRoom(roomId, userId);
 
+            boolean roomEmpty = sessionRegistry.getRoomParticipantCount(roomId) == 0;
+            if (callService != null) {
+                callService.recordGroupCallLeave(roomId, userId, roomEmpty);
+            }
+
             // Broadcast thông báo cho phòng họp người dùng đã rời đi
             SignalMessage userLeftBroadcast = SignalMessage.builder()
                     .type(SignalType.USER_LEFT)
@@ -338,7 +360,7 @@ public class SignalingController {
 
             messagingTemplate.convertAndSend("/topic/call/room/" + roomId, userLeftBroadcast);
 
-            if (sessionRegistry.getRoomParticipantCount(roomId) == 0 && groupCallLifecycleService != null) {
+            if (roomEmpty && groupCallLifecycleService != null) {
                 groupCallLifecycleService.notifyGroupCallEnded(roomId, userId);
             }
         }
@@ -403,6 +425,34 @@ public class SignalingController {
         return profile;
     }
 
+    private String resolveGroupName(String roomId) {
+        if (conversationRepository == null || roomId == null || roomId.isBlank()) {
+            return "Cuộc họp nhóm";
+        }
+        try {
+            return conversationRepository.findById(UUID.fromString(roomId))
+                    .map(Conversation::getName)
+                    .filter(name -> name != null && !name.isBlank())
+                    .orElse("Cuộc họp nhóm");
+        } catch (IllegalArgumentException ignored) {
+            return "Cuộc họp nhóm";
+        }
+    }
+
+    /**
+     * REST Endpoint cấp phát danh sách STUN/TURN ICE Servers động cho WebRTC Client
+     */
+    @ResponseBody
+    @GetMapping("/api/call/ice-servers")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getIceServers() {
+        List<IceServerDto> servers = (iceServerConfigProperties != null)
+                ? iceServerConfigProperties.toIceServerDtos()
+                : List.of(IceServerDto.builder()
+                        .urls(List.of("stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"))
+                        .build());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("iceServers", servers)));
+    }
+
     /**
      * REST Endpoint kiểm tra sức khỏe và trạng thái Signaling Server
      */
@@ -458,12 +508,27 @@ public class SignalingController {
     }
 
     /**
-     * REST Endpoint lấy lịch sử cuộc gọi của người dùng (Call Logs) kèm tên và ảnh đại diện
+     * REST Endpoint thống kê lịch sử cuộc gọi tổng hợp của người dùng
+     */
+    @ResponseBody
+    @GetMapping("/api/call/stats/{userId}")
+    public ResponseEntity<ApiResponse<CallStatsDto>> getCallStats(@PathVariable String userId) {
+        String normalizedUserId = resolveToUserId(userId);
+        CallStatsDto stats = callService.getCallStats(normalizedUserId);
+        return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    /**
+     * REST Endpoint lấy lịch sử cuộc gọi của người dùng (Call Logs) kèm bộ lọc & thống kê nhóm
      */
     @ResponseBody
     @GetMapping("/api/call/history/{userId}")
-    public ResponseEntity<ApiResponse<List<CallHistoryDto>>> getCallHistory(@PathVariable String userId) {
-        List<CallSession> history = callService.getCallHistory(userId);
+    public ResponseEntity<ApiResponse<List<CallHistoryDto>>> getCallHistory(
+            @PathVariable String userId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status) {
+        String currentUserIdStr = resolveToUserId(userId);
+        List<CallSession> history = callService.getCallHistoryFiltered(currentUserIdStr, type, status);
 
         Set<UUID> userUuids = new HashSet<>();
         Set<String> emails = new HashSet<>();
@@ -490,17 +555,22 @@ public class SignalingController {
             }
         }
 
-        String currentUserIdStr = resolveToUserId(userId);
-
         List<CallHistoryDto> dtoList = history.stream().map(session -> {
-            User initiator = userMap.get(session.getInitiatorId());
-            User receiver = userMap.get(session.getReceiverId());
+            User initiator = session.getInitiatorId() != null ? userMap.get(session.getInitiatorId()) : null;
+            User receiver = session.getReceiverId() != null ? userMap.get(session.getReceiverId()) : null;
+            boolean isGroup = Boolean.TRUE.equals(session.getIsGroup());
 
-            boolean isCaller = session.getInitiatorId().equalsIgnoreCase(userId)
-                    || session.getInitiatorId().equalsIgnoreCase(currentUserIdStr);
+            boolean isCaller = session.getInitiatorId() != null && (
+                    session.getInitiatorId().equalsIgnoreCase(userId)
+                            || session.getInitiatorId().equalsIgnoreCase(currentUserIdStr));
 
             User otherUser = isCaller ? receiver : initiator;
-            String otherId = isCaller ? session.getReceiverId() : session.getInitiatorId();
+            String otherId = isGroup
+                    ? session.getRoomId()
+                    : (isCaller ? session.getReceiverId() : session.getInitiatorId());
+            String otherName = isGroup
+                    ? (session.getGroupName() != null ? session.getGroupName() : "Cuộc họp nhóm")
+                    : (otherUser != null ? otherUser.getDisplayName() : otherId);
 
             return CallHistoryDto.builder()
                     .id(session.getId())
@@ -512,8 +582,8 @@ public class SignalingController {
                     .receiverName(receiver != null ? receiver.getDisplayName() : session.getReceiverId())
                     .receiverAvatar(receiver != null ? receiver.getAvatarUrl() : null)
                     .otherUserId(otherId)
-                    .otherUserName(otherUser != null ? otherUser.getDisplayName() : otherId)
-                    .otherUserAvatar(otherUser != null ? otherUser.getAvatarUrl() : null)
+                    .otherUserName(otherName)
+                    .otherUserAvatar(isGroup ? null : (otherUser != null ? otherUser.getAvatarUrl() : null))
                     .roomId(session.getRoomId())
                     .callType(session.getCallType())
                     .status(session.getStatus())
@@ -521,6 +591,9 @@ public class SignalingController {
                     .endedAt(session.getEndedAt())
                     .durationSeconds(session.getDurationSeconds())
                     .createdAt(session.getCreatedAt())
+                    .isGroup(isGroup)
+                    .groupName(session.getGroupName())
+                    .participantCount(isGroup ? callService.getParticipantCount(session.getId()) : 2)
                     .build();
         }).collect(Collectors.toList());
 

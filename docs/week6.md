@@ -9,9 +9,9 @@
 
 ## 1. TỔNG QUAN TIẾN ĐỘ SPRINT 6
 
-- [ ] **Tiến độ chung toàn đội:** `35%` (Phân hệ Emoji Reaction, Reply/Quote & Phân trang tin nhắn của TV1 đã hoàn thành 100%)
+- [ ] **Tiến độ chung toàn đội:** `68%` (Phân hệ Emoji Reaction/Reply/Pagination của TV1 và Coturn/ICE Restart/CallLogs của TV2 đã hoàn thành 100%)
 - [x] **Mục tiêu 1 (TV1):** Tính năng Thả cảm xúc (`MessageReaction`), Trả lời trích dẫn tin nhắn cũ (`replyToId` / Quote), Phân trang tải tin nhắn cũ (Infinite Scroll / Load More) và đồng bộ realtime qua WebSocket STOMP. - **ĐÃ HOÀN THÀNH 100%**
-- [ ] **Mục tiêu 2 (TV2):** Cấu hình Coturn Server (STUN/TURN vượt NAT), cơ chế tự động phục hồi kết nối khi rớt mạng (ICE Restart / Auto-reconnect), tự động điều chỉnh bitrate video khi mạng yếu và nâng cấp thống kê `CallLogs`.
+- [x] **Mục tiêu 2 (TV2):** Cấu hình Coturn Server (STUN/TURN vượt NAT), cơ chế tự động phục hồi kết nối khi rớt mạng (ICE Restart / Auto-reconnect), tự động điều chỉnh bitrate video khi mạng yếu và nâng cấp thống kê `CallLogs`. - **ĐÃ HOÀN THÀNH 100%**
 - [ ] **Mục tiêu 3 (TV3):** Xây dựng API & UI AI Smart Replies (3 gợi ý trả lời nhanh dạng pill phía trên ô nhập tin nhắn), Modal Biên bản cuộc họp tự động (Meeting Minutes) và Rate Limiting bảo vệ API Key Gemini.
 
 ---
@@ -88,26 +88,26 @@
 > **Trọng tâm:** Nâng cấp độ ổn định cuộc gọi WebRTC cho môi trường mạng thực tế: tích hợp Coturn STUN/TURN Server, cơ chế tự động kết nối lại khi mất mạng (ICE Restart), thích ứng băng thông khi mạng yếu và hoàn thiện `CallLogs` chi tiết.
 
 ### 📅 Ngày 1-2: Cấu hình Coturn Server (STUN/TURN) & API Cấp Phát ICE Config
-- [ ] **Ngày 1:** Tạo file cấu hình `docker/coturn/turnserver.conf` và bổ sung service `coturn` vào `docker-compose.yml` (cổng `3478/udp`, `3478/tcp`, dải relay ports).
-- [ ] **Ngày 2:** Tạo Backend endpoint `GET /api/call/ice-servers` (trong `CallController` / `SignalingController`) trả về cấu hình STUN + TURN credentials từ `application.yml` để WebRTC Client sử dụng động thay vì hardcode.
+- [x] **Ngày 1:** Tạo file cấu hình `docker/coturn/turnserver.conf` và bổ sung service `coturn` vào `docker-compose.yml` (cổng `3478/udp`, `3478/tcp`, dải relay ports).
+- [x] **Ngày 2:** Tạo Backend endpoint `GET /api/call/ice-servers` (trong `CallController` / `SignalingController`) trả về cấu hình STUN + TURN credentials từ `application.yml` để WebRTC Client sử dụng động thay vì hardcode.
 
 ### 📅 Ngày 3-4: Cơ chế Tự động Kết nối lại (ICE Restart) & Giảm Băng thông Mạng Yếu
-- [ ] **Ngày 3:** Nâng cấp `webrtcManager.ts` và `meshWebrtcManager.ts`:
-  - [ ] Theo dõi `oniceconnectionstatechange` (`disconnected` / `failed`): Tự động kích hoạt `pc.createOffer({ iceRestart: true })` và gửi tín hiệu `ICE_RESTART` qua Signaling Server để khôi phục cuộc gọi không cần gọi lại.
-  - [ ] Hiển thị banner cảnh báo *"Đang kết nối lại cuộc gọi..."* trên `ActiveCallModal.tsx`.
-- [ ] **Ngày 4:** Xây dựng bộ giám sát chất lượng mạng (`useNetworkQuality.ts` dùng `pc.getStats()`):
-  - [ ] Đo tỷ lệ mất gói (`packetsLost`) và độ trễ (`roundTripTime`).
-  - [ ] Khi mạng yếu: Tự động hạ bitrate video qua `RTCRtpSender.setParameters()` (`maxBitrate`) hoặc tự động chuyển sang chế độ ưu tiên thoại để tiếng nói luôn mượt mà; hiển thị cột sóng chất lượng mạng (Tốt / Trung bình / Yếu).
+- [x] **Ngày 3:** Nâng cấp `webrtcManager.ts` và `meshWebrtcManager.ts`:
+  - [x] Theo dõi `oniceconnectionstatechange` (`disconnected` / `failed`): Tự động kích hoạt `pc.createOffer({ iceRestart: true })` và gửi tín hiệu `ICE_RESTART` qua Signaling Server để khôi phục cuộc gọi không cần gọi lại.
+  - [x] Hiển thị banner cảnh báo *"Đang kết nối lại cuộc gọi..."* trên `ActiveCallModal.tsx`.
+- [x] **Ngày 4:** Xây dựng bộ giám sát chất lượng mạng (`useNetworkQuality.ts` dùng `pc.getStats()`):
+  - [x] Đo tỷ lệ mất gói (`packetsLost`) và độ trễ (`roundTripTime`).
+  - [x] Khi mạng yếu: Tự động hạ bitrate video qua `RTCRtpSender.setParameters()` (`maxBitrate`) hoặc tự động chuyển sang chế độ ưu tiên thoại để tiếng nói luôn mượt mà; hiển thị cột sóng chất lượng mạng (Tốt / Trung bình / Yếu).
 
 ### 📅 Ngày 5-6: Hoàn thiện Bảng & Trang Thống kê Lịch sử Cuộc gọi (`CallLogs`)
-- [ ] **Ngày 5:** Mở rộng `CallSession` / `CallHistoryDto` và `CallService`:
-  - [ ] Bổ sung thống kê tổng hợp: tổng số cuộc gọi, cuộc gọi nhỡ, tổng thời lượng gọi, hỗ trợ lọc theo loại (`AUDIO | VIDEO | GROUP`) và trạng thái (`COMPLETED | MISSED | REJECTED`).
-- [ ] **Ngày 6:** Nâng cấp `CallsPage.tsx`:
-  - [ ] Hiển thị thẻ thống kê nhanh (Total / Missed / Duration), phân tách rõ cuộc gọi 1-1 và cuộc họp nhóm, nút gọi lại Audio/Video nhanh.
+- [x] **Ngày 5:** Mở rộng `CallSession` / `CallHistoryDto` và `CallService`:
+  - [x] Bổ sung thống kê tổng hợp: tổng số cuộc gọi, cuộc gọi nhỡ, tổng thời lượng gọi, hỗ trợ lọc theo loại (`AUDIO | VIDEO | GROUP`) và trạng thái (`COMPLETED | MISSED | REJECTED`).
+- [x] **Ngày 6:** Nâng cấp `CallsPage.tsx`:
+  - [x] Hiển thị thẻ thống kê nhanh (Total / Missed / Duration), phân tách rõ cuộc gọi 1-1 và cuộc họp nhóm, nút gọi lại Audio/Video nhanh.
 
 ### 📅 Ngày 7: Unit Tests & Kiểm thử Mô phỏng Mạng Yếu
-- [ ] Viết Unit Test cho endpoint `/api/call/ice-servers`, `CallService` thống kê lịch sử gọi.
-- [ ] Thử nghiệm bật/tắt mạng tạm thời (Chrome DevTools Network Throttling / Offline 3s -> Online) xác nhận ICE Restart khôi phục cuộc gọi thành công; chạy `./mvnw test` và `npm run build` PASS 100%.
+- [x] Viết Unit Test cho endpoint `/api/call/ice-servers`, `CallService` thống kê lịch sử gọi.
+- [x] Thử nghiệm bật/tắt mạng tạm thời (Chrome DevTools Network Throttling / Offline 3s -> Online) xác nhận ICE Restart khôi phục cuộc gọi thành công; chạy `./mvnw test` và `npm run build` PASS 100%.
 
 ---
 
@@ -151,10 +151,10 @@
 | [x] | **W6-TV1-03** | **TV1** | Giao diện Emoji Reaction Picker & Tooltip danh sách người thả | 6h | Rê chuột chọn 6 emoji nhanh; số đếm cập nhật realtime giữa 2 tab. |
 | [x] | **W6-TV1-04** | **TV1** | Giao diện Trả lời trích dẫn (Reply/Quote) & Tải thêm tin cũ | 8h | Bấm khối trích dẫn cuộn tới tin gốc; tải thêm tin cũ không giật vị trí cuộn. |
 | [x] | **W6-TV1-05** | **TV1** | Unit Tests Reaction, Reply & Pagination (`ChatServiceTest`) | 4h | Toàn bộ test suite Backend & Frontend build PASS 100%. |
-| [ ] | **W6-TV2-01** | **TV2** | Cấu hình Coturn STUN/TURN Server & API `/api/call/ice-servers` | 6h | Service Coturn chạy ổn định trên Docker; Client nhận ICE config động. |
-| [ ] | **W6-TV2-02** | **TV2** | Cơ chế ICE Restart (Auto-reconnect) & Adaptive Video Bitrate | 10h | Tự động kết nối lại sau khi rớt mạng ngắn; ưu tiên âm thanh khi mạng yếu. |
-| [ ] | **W6-TV2-03** | **TV2** | Nâng cấp `CallLogs` thống kê chi tiết & UI `CallsPage` | 6h | Hiển thị bộ lọc loại cuộc gọi, thống kê thời lượng & gọi lại 1 click. |
-| [ ] | **W6-TV2-04** | **TV2** | Unit Tests & Kiểm thử mô phỏng mạng yếu | 4h | Pass toàn bộ test backend và mô phỏng rớt mạng thành công. |
+| [x] | **W6-TV2-01** | **TV2** | Cấu hình Coturn STUN/TURN Server & API `/api/call/ice-servers` | 6h | Service Coturn chạy ổn định trên Docker; Client nhận ICE config động. |
+| [x] | **W6-TV2-02** | **TV2** | Cơ chế ICE Restart (Auto-reconnect) & Adaptive Video Bitrate | 10h | Tự động kết nối lại sau khi rớt mạng ngắn; ưu tiên âm thanh khi mạng yếu. |
+| [x] | **W6-TV2-03** | **TV2** | Nâng cấp `CallLogs` thống kê chi tiết & UI `CallsPage` | 6h | Hiển thị bộ lọc loại cuộc gọi, thống kê thời lượng & gọi lại 1 click. |
+| [x] | **W6-TV2-04** | **TV2** | Unit Tests & Kiểm thử mô phỏng mạng yếu | 4h | Pass toàn bộ test backend và mô phỏng rớt mạng thành công. |
 | [ ] | **W6-TV3-01** | **TV3** | Cơ chế Rate Limiting AI (`429 Too Many Requests`) & Bảo mật Key | 5h | Giới hạn request/phút theo user, bảo vệ API Key an toàn tuyệt đối. |
 | [ ] | **W6-TV3-02** | **TV3** | Backend & API AI Smart Replies (`/smart-replies`) | 6h | Sinh đúng 3 gợi ý trả lời sát ngữ cảnh cuộc hội thoại. |
 | [ ] | **W6-TV3-03** | **TV3** | UI 3 nút Smart Reply Pills & Modal Biên bản cuộc họp (Export MD/PDF) | 8h | Click pill gửi nhanh trong khung chat; xuất biên bản họp sắc nét. |

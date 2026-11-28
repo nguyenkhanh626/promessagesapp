@@ -34,5 +34,8 @@ public class CallHistoryDto {
     private LocalDateTime endedAt;
     private Long durationSeconds;
     private LocalDateTime createdAt;
+    private Boolean isGroup;
+    private String groupName;
+    private Integer participantCount;
 }
 
